@@ -86,7 +86,7 @@ struct ApplyLeaveView: View {
     @State private var type: LeaveType = .annual; @State private var reason = ""; @State private var halfDay = false
     var body: some View { Form { Section("Leave details") { Picker("Leave type", selection: $type) { ForEach(LeaveType.allCases) { Text($0.rawValue).tag($0) } }; DatePicker("From", selection: .constant(Date()), displayedComponents: .date); DatePicker("To", selection: .constant(Date()), displayedComponents: .date); Toggle("Half-day", isOn: $halfDay); TextField("Reason", text: $reason, axis: .vertical) }; Section { Button("Submit request") { model.leaveRequests.insert(LeaveRequest(type: type, dates: "30 Oct 2026", days: halfDay ? 0.5 : 1, reason: reason.isEmpty ? "Personal work" : reason, status: .pending), at: 0); dismiss() }.buttonStyle(PrimaryButtonStyle()) } }.navigationTitle("Apply for leave") }
 }
-struct LeaveDetailView: View { let request: LeaveRequest; var body: some View { List { LabeledContent("Type", value: request.type.rawValue); LabeledContent("Dates", value: request.dates); LabeledContent("Duration", value: "\(request.days, specifier: "%g") day(s)"); LabeledContent("Status", value: request.status.rawValue); Section("Reason") { Text(request.reason) } }.navigationTitle("Leave details") } }
+struct LeaveDetailView: View { let request: LeaveRequest; var body: some View { List { LabeledContent("Type", value: request.type.rawValue); LabeledContent("Dates", value: request.dates); LabeledContent("Duration", value: "\(request.days) day(s)"); LabeledContent("Status", value: request.status.rawValue); Section("Reason") { Text(request.reason) } }.navigationTitle("Leave details") } }
 
 struct TicketsView: View {
     @EnvironmentObject private var model: AppModel
