@@ -1,0 +1,43 @@
+diff --git a/node_modules/node-zklib/utils.js b/node_modules/node-zklib/utils.js
+index 97ce15b..f328401 100644
+--- a/node_modules/node-zklib/utils.js
++++ b/node_modules/node-zklib/utils.js
+@@ -147,19 +147,35 @@ module.exports.decodeRecordData40 = (recordData)=>{
+     const record = {
+         userSn: recordData.readUIntLE(0, 2),
+         deviceUserId: recordData
+-        .slice(2, 2+9)
++        .slice(2, 2+24)
+         .toString('ascii')
+         .split('\0')
+         .shift(),
+         recordTime: parseTimeToDate(recordData.readUInt32LE(27)),
++        rawStatus: recordData.readUInt8(26),
++        rawPunch: recordData.readUInt8(31),
++        rawHex: recordData.toString('hex'),
+       }
+       return record
+ }
+ 
+ module.exports.decodeRecordData16 = (recordData)=>{
++    if (recordData.length === 8) {
++      return {
++        deviceUserId: recordData.readUInt16LE(0),
++        userIdIsInternal: true,
++        recordTime: parseTimeToDate(recordData.readUInt32LE(3)),
++        rawStatus: recordData.readUInt8(2),
++        rawPunch: recordData.readUInt8(7),
++        rawHex: recordData.toString('hex')
++      }
++    }
+     const record = {
+-        deviceUserId: recordData.readUIntLE(0, 2),
+-        recordTime: parseTimeToDate(recordData.readUInt32LE(4))
++        deviceUserId: recordData.readUInt32LE(0),
++        recordTime: parseTimeToDate(recordData.readUInt32LE(4)),
++        rawStatus: recordData.readUInt8(8),
++        rawPunch: recordData.readUInt8(9),
++        rawHex: recordData.toString('hex')
+     }
+     return record
+ }
