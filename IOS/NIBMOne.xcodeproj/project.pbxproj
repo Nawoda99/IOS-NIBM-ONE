@@ -1,0 +1,141 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	compatibilityVersion = "Xcode 14.0";
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		B00000000000000000000011 /* WidgetSummary.swift in app Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001; };
+		B00000000000000000000012 /* WidgetSummary.swift in widget Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000001; };
+		B00000000000000000000013 /* NIBMOneWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = B00000000000000000000002; };
+		B00000000000000000000014 /* NIBMOneWidget.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = B00000000000000000000003; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
+		A00000000000000000000011 /* NIBMOneApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000001 /* NIBMOneApp.swift */; };
+		A00000000000000000000012 /* Models.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000002 /* Models.swift */; };
+		A00000000000000000000013 /* AppModel.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000003 /* AppModel.swift */; };
+		A00000000000000000000014 /* ContentView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000004 /* ContentView.swift */; };
+		A00000000000000000000015 /* DeviceFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000007 /* DeviceFeatures.swift */; };
+		A00000000000000000000016 /* APIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000008 /* APIClient.swift */; };
+		A00000000000000000000017 /* FingerprintMachineView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A00000000000000000000009 /* FingerprintMachineView.swift */; };
+		A00000000000000000000018 /* AppConfiguration.swift in Sources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000A /* AppConfiguration.swift */; };
+		A00000000000000000000019 /* .env in Resources */ = {isa = PBXBuildFile; fileRef = A0000000000000000000000B /* .env */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		B00000000000000000000020 = {isa = PBXContainerItemProxy; containerPortal = A00000000000000000000050; proxyType = 1; remoteGlobalIDString = B00000000000000000000040; remoteInfo = NIBMOneWidget; };
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		B00000000000000000000021 /* Embed App Extensions */ = {isa = PBXCopyFilesBuildPhase; buildActionMask = 2147483647; dstPath = ""; dstSubfolderSpec = 13; files = (B00000000000000000000014, ); name = "Embed App Extensions"; runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		B00000000000000000000001 /* WidgetSummary.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = WidgetSummary.swift; sourceTree = "<group>"; };
+		B00000000000000000000002 /* NIBMOneWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NIBMOneWidget.swift; sourceTree = "<group>"; };
+		B00000000000000000000003 /* NIBMOneWidget.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = NIBMOneWidget.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+		B00000000000000000000004 /* NIBMOneWidget Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		B00000000000000000000005 /* NIBMOne.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NIBMOne.entitlements; sourceTree = "<group>"; };
+		B00000000000000000000006 /* NIBMOneWidget.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = NIBMOneWidget.entitlements; sourceTree = "<group>"; };
+		A00000000000000000000001 /* NIBMOneApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = NIBMOneApp.swift; sourceTree = "<group>"; };
+		A00000000000000000000002 /* Models.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Models.swift; sourceTree = "<group>"; };
+		A00000000000000000000003 /* AppModel.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModel.swift; sourceTree = "<group>"; };
+		A00000000000000000000004 /* ContentView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ContentView.swift; sourceTree = "<group>"; };
+		A00000000000000000000005 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		A00000000000000000000007 /* DeviceFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = DeviceFeatures.swift; sourceTree = "<group>"; };
+		A00000000000000000000008 /* APIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIClient.swift; sourceTree = "<group>"; };
+		A00000000000000000000009 /* FingerprintMachineView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FingerprintMachineView.swift; sourceTree = "<group>"; };
+		A0000000000000000000000A /* AppConfiguration.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppConfiguration.swift; sourceTree = "<group>"; };
+		A0000000000000000000000B /* .env */ = {isa = PBXFileReference; lastKnownFileType = text; path = .env; sourceTree = SOURCE_ROOT; };
+		A00000000000000000000006 /* NIBMOne.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = NIBMOne.app; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		B00000000000000000000022 /* Widget Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A00000000000000000000020 /* Frameworks */ = {isa = PBXFrameworksBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00000000000000000000030 = {isa = PBXGroup; children = (A00000000000000000000031, B00000000000000000000030, A00000000000000000000032, A0000000000000000000000B, ); sourceTree = "<group>"; };
+		A00000000000000000000031 /* NIBMOne */ = {isa = PBXGroup; children = (A00000000000000000000001, A00000000000000000000002, A00000000000000000000003, A00000000000000000000004, A00000000000000000000007, A00000000000000000000008, A00000000000000000000009, A0000000000000000000000A, B00000000000000000000001, B00000000000000000000005, A00000000000000000000005, ); path = NIBMOne; sourceTree = "<group>"; };
+		A00000000000000000000032 /* Products */ = {isa = PBXGroup; children = (A00000000000000000000006, B00000000000000000000003, ); name = Products; sourceTree = "<group>"; };
+		B00000000000000000000030 /* NIBMOneWidget */ = {isa = PBXGroup; children = (B00000000000000000000002, B00000000000000000000004, B00000000000000000000006, ); path = NIBMOneWidget; sourceTree = "<group>"; };
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00000000000000000000040 /* NIBMOne */ = {isa = PBXNativeTarget; buildConfigurationList = A00000000000000000000051; buildPhases = (A00000000000000000000041, A00000000000000000000020, A00000000000000000000042, B00000000000000000000021, ); buildRules = (); dependencies = (B00000000000000000000023, ); name = NIBMOne; productName = NIBMOne; productReference = A00000000000000000000006; productType = "com.apple.product-type.application"; };
+		B00000000000000000000040 /* NIBMOneWidget */ = {isa = PBXNativeTarget; buildConfigurationList = B00000000000000000000051; buildPhases = (B00000000000000000000041, B00000000000000000000022, B00000000000000000000042, ); buildRules = (); dependencies = (); name = NIBMOneWidget; productName = NIBMOneWidget; productReference = B00000000000000000000003; productType = "com.apple.product-type.app-extension"; };
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000000000000000000050 /* Project object */ = {isa = PBXProject; attributes = { LastUpgradeCheck = 1600; TargetAttributes = { A00000000000000000000040 = { CreatedOnToolsVersion = 16.0; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; }; }; B00000000000000000000040 = {CreatedOnToolsVersion = 16.0; SystemCapabilities = {com.apple.ApplicationGroups.iOS = {enabled = 1; }; }; }; }; }; buildConfigurationList = A00000000000000000000052; compatibilityVersion = "Xcode 14.0"; developmentRegion = en; hasScannedForEncodings = 0; knownRegions = (en, Base, ); mainGroup = A00000000000000000000030; productRefGroup = A00000000000000000000032; projectDirPath = ""; projectRoot = ""; targets = (A00000000000000000000040, B00000000000000000000040, ); };
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		B00000000000000000000042 /* Widget Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (); runOnlyForDeploymentPostprocessing = 0; };
+		A00000000000000000000042 /* Resources */ = {isa = PBXResourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000019, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00000000000000000000041 /* Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (A00000000000000000000011, A00000000000000000000012, A00000000000000000000013, A00000000000000000000014, A00000000000000000000015, A00000000000000000000016, A00000000000000000000017, A00000000000000000000018, B00000000000000000000011, ); runOnlyForDeploymentPostprocessing = 0; };
+		B00000000000000000000041 /* Widget Sources */ = {isa = PBXSourcesBuildPhase; buildActionMask = 2147483647; files = (B00000000000000000000012, B00000000000000000000013, ); runOnlyForDeploymentPostprocessing = 0; };
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		B00000000000000000000023 = {isa = PBXTargetDependency; target = B00000000000000000000040; targetProxy = B00000000000000000000020; };
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		A00000000000000000000060 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = NIBMOne/NIBMOne.entitlements;
+				INFOPLIST_FILE = NIBMOne/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.example.NIBMOne";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		A00000000000000000000061 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_STYLE = Automatic;
+				CODE_SIGN_ENTITLEMENTS = NIBMOne/NIBMOne.entitlements;
+				INFOPLIST_FILE = NIBMOne/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				PRODUCT_BUNDLE_IDENTIFIER = "com.example.NIBMOne";
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SUPPORTS_MACCATALYST = NO;
+				SUPPORTS_MAC_DESIGNED_FOR_IPHONE_IPAD = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		A00000000000000000000062 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; }; name = Debug; };
+		A00000000000000000000063 /* Release */ = {isa = XCBuildConfiguration; buildSettings = { ALWAYS_SEARCH_USER_PATHS = NO; }; name = Release; };
+		B00000000000000000000060 /* Debug */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; CODE_SIGN_ENTITLEMENTS = NIBMOneWidget/NIBMOneWidget.entitlements; INFOPLIST_FILE = NIBMOneWidget/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.NIBMOne.Widget; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Debug; };
+		B00000000000000000000061 /* Release */ = {isa = XCBuildConfiguration; buildSettings = {APPLICATION_EXTENSION_API_ONLY = YES; CODE_SIGN_STYLE = Automatic; CODE_SIGN_ENTITLEMENTS = NIBMOneWidget/NIBMOneWidget.entitlements; INFOPLIST_FILE = NIBMOneWidget/Info.plist; IPHONEOS_DEPLOYMENT_TARGET = 17.0; PRODUCT_BUNDLE_IDENTIFIER = com.example.NIBMOne.Widget; PRODUCT_NAME = "$(TARGET_NAME)"; SDKROOT = iphoneos; SKIP_INSTALL = YES; SUPPORTED_PLATFORMS = "iphoneos iphonesimulator"; SUPPORTS_MACCATALYST = NO; SWIFT_VERSION = 5.0; TARGETED_DEVICE_FAMILY = "1,2"; }; name = Release; };
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		B00000000000000000000051 = {isa = XCConfigurationList; buildConfigurations = (B00000000000000000000060, B00000000000000000000061, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A00000000000000000000051 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000060, A00000000000000000000061, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+		A00000000000000000000052 = {isa = XCConfigurationList; buildConfigurations = (A00000000000000000000062, A00000000000000000000063, ); defaultConfigurationIsVisible = 0; defaultConfigurationName = Release; };
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000000000000000000050;
+}

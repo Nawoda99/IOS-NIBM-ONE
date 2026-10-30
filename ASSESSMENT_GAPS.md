@@ -1,0 +1,13 @@
+# Current submission gaps
+
+Checked against iOS_CW_Assessment_2026.pdf on 30 October 2026. This file describes the current source honestly; it is not a claim that all mandatory criteria have passed.
+
+1. The assessment prohibits LLM-generated executable code and implementation logic. Earlier work in this conversation included such assistance. The report discloses it; lecturer review is needed. No declaration of exclusively student-authored code is made.
+2. Component 2 requires two of Push Notifications, Core Data and Face ID/Touch ID. LocalAuthentication app lock is present, but it protects an already authenticated session; it is not biometric server login. APNs delivery and Core Data persistence are not implemented. A permission prompt or in-app notices do not establish push delivery.
+3. Component 4 explicitly requires Swift Testing, not XCTest. The four files under IOS/Tests currently import XCTest. The student must independently implement and run compliant tests for attendance boundaries/first-last times, leave validation/overlap, ticket validation, environment parsing and widget expiry. No replacement executable test code is generated during report preparation.
+4. Xcode SDK compilation, iPhone/iPad runtime checks, sensor permission flows and the widget App Group/signing check remain pending on a Mac. Grammar/project checks from development do not substitute for a build.
+5. The project targets iPhone and iPad but currently shares the same tab-based interface. A dedicated iPad navigation/layout adaptation has not been implemented or tested. The LO1 reflection distinguishes comparison from completed adaptation.
+6. The current backend URL is LAN-only. Markers need a network route to the student's running PC or must run the supplied backend locally. No public hosted access is claimed.
+7. The owner deliberately removed backend test sources, backend documentation/templates and generated verification files before packaging. Historical development runs reported 38 Node checks and six isolated MySQL checks, but those are not reproducible from the final archive's absent test suite. The package does not present npm test as a current passing suite.
+8. QR lookup uses a small sample asset catalogue. Siri/App Intents, institutional SSO, password-reset delivery and APNs are not implemented. Leave allowances are sample policy; displayed attendance spans include breaks and are not payroll calculations.
+9. The student must record a 3-5 minute demonstration in their own voice, review the report/reflection, check private GitHub lecturer access and attend the separate live viva. Tutorial 4 is a separate submission and is not evidenced by this archive.

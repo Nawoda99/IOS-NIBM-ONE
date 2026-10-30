@@ -5,4 +5,11 @@ DerivedData/
 xcuserdata/
 tmp/
 output/
+.env
+.env.*
+!.env.example
+node_modules/
+backend/storage/
 .DS_Store
+
+.tmp-pdf/
