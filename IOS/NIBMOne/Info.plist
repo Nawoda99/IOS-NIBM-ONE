@@ -9,7 +9,7 @@
 <key>CFBundleVersion</key><string>1</string>
 <key>CFBundleDisplayName</key><string>NIBM ONE</string>
 <key>CFBundleURLTypes</key><array><dict>
-<key>CFBundleURLName</key><string>com.example.NIBMOne</string>
+<key>CFBundleURLName</key><string>com.nawoda.nibmone</string>
 <key>CFBundleURLSchemes</key><array><string>nibmone</string></array>
 </dict></array>
 <key>NSCameraUsageDescription</key><string>Scan room and asset QR codes for service requests.</string>

@@ -2,7 +2,7 @@ import Foundation
 
 // This file belongs to both the app and widget targets. No credentials enter this cache.
 struct WidgetSummary: Codable, Equatable {
-    static let groupID = "group.com.example.NIBMOne"
+    static let groupID = "group.com.nawoda.nibmone"
     static let kind = "NIBMOneSummary"
     static let cacheKey = "signed-in-summary-v1"
     let updatedAt: Date
