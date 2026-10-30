@@ -1090,7 +1090,13 @@ struct NotificationsView: View {
     @EnvironmentObject private var model: AppModel
     var body: some View {
         List {
-            Section { Text("Activity history. Remote push delivery is not connected.").font(.caption).foregroundStyle(.secondary) }
+            Section("Notification delivery") {
+                Text(model.isRemoteSession ? model.pushStatus : "Sign in with your employee account to receive punch notifications.")
+                    .font(.caption).foregroundStyle(.secondary)
+                NavigationLink(destination: NotificationSettingsView()) {
+                    Label("Notification settings", systemImage: "bell.badge")
+                }
+            }
             ForEach(model.notices) { notice in
                 NavigationLink {
                     NoticeDetailView(destination: notice.destination).task { await model.markRead(notice.id) }

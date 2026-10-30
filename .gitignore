@@ -9,5 +9,6 @@ output/
 .env.*
 !.env.example
 node_modules/
+*.p8
 backend/storage/
 .DS_Store

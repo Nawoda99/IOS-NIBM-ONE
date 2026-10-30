@@ -109,6 +109,7 @@ final class AppModel: ObservableObject {
             sessionID = UUID(); attendanceRequestID = UUID(); attendanceMonth = AttendanceCalendarRules.startOfMonth(Date())
             selectedTab = 0; isLocked = false
             apply(snapshot); isAuthenticated = true; navigateFromWidget()
+            pushStatus = "Waiting for iPhone notification registration."
             return
         }
         guard epfNo.trimmingCharacters(in: .whitespacesAndNewlines).uppercased() == "900001",
