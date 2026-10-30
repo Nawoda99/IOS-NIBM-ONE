@@ -2,6 +2,21 @@ import XCTest
 @testable import NIBMOneDomain
 
 final class DomainTests: XCTestCase {
+    func testEmployeeProfileDetailsAllowMissingOptionalFields() throws {
+        let details = try JSONDecoder().decode(EmployeeProfileDetails.self, from: Data("{\"firstName\":\"Alex\",\"gender\":\"Male\",\"joinedDate\":\"2022-01-10\"}".utf8))
+        XCTAssertEqual(details.firstName, "Alex")
+        XCTAssertEqual(details.joinedDate, "2022-01-10")
+        XCTAssertNil(details.personalEmail)
+        XCTAssertNil(details.emergencyContactName)
+        XCTAssertNil(try JSONDecoder().decode(EmployeeProfileDetails.self, from: Data("{}".utf8)).identityNumber)
+    }
+
+    func testEmployeeProfileCalendarDatesDisplayWithoutTimezoneShift() {
+        XCTAssertEqual(EmployeeProfileDetails.displayDate("2022-01-10"), "10 Jan 2022")
+        XCTAssertNil(EmployeeProfileDetails.displayDate(nil))
+        XCTAssertNil(EmployeeProfileDetails.displayDate("not-a-date"))
+    }
+
     private var calendar: Calendar {
         var calendar = Calendar(identifier: .gregorian)
         calendar.timeZone = TimeZone(secondsFromGMT: 0)!
@@ -32,7 +47,7 @@ final class DomainTests: XCTestCase {
     func testHalfDayUsesOneDate() throws { XCTAssertEqual(try validate(end: date(29), halfDay: true), 0.5) }
     func testReversedDatesAreRejected() { XCTAssertThrowsError(try validate(start: date(30), end: date(29))) }
     func testHalfDayRangeIsRejected() { XCTAssertThrowsError(try validate(halfDay: true)) }
-    func testPastDatesAreRejected() { XCTAssertThrowsError(try validate(start: date(28))) }
+    func testPastDatesAreAllowed() throws { XCTAssertEqual(try validate(start: date(28), end: date(28)), 1) }
     func testWhitespaceReasonIsRejected() { XCTAssertThrowsError(try validate(reason: " \n ")) }
     func testInsufficientBalanceIsRejected() { XCTAssertThrowsError(try validate(balance: 1)) }
     func testYearBoundaryRequiresSeparateRequests() {

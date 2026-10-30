@@ -13,12 +13,14 @@ import { attendanceMonthRange, attendanceTimeZone, dailyAttendance } from './att
 import {appRoles,permissionCatalog,permissionsFor,hasPermission,requirePermission,requireAdministrator,savePermissions} from './access.js';
 import {employeeAccounts,createAccount,updateAccount} from './administration.js';
 import {branchDirectory,saveBranchLocation} from './branches.js';
+import { registerPushDevice } from './push.js';
+import { vehicleRouter, stopSessionVehicleSharing } from './vehicles.js';
 
 const dummyPassword = bcrypt.hashSync('invalid-login-placeholder', 12);
 const privileged = user => hasPermission(user,'machines.manage');
 const remoteProfile = user => ({...profile({ ...user, id: appID(user.id), epf_no: String(user.epf_no), branch: user.branch ?? '' }),permissions:user.permissions??[]});
 
-export function createApp({ db, config, deviceSync }) {
+export function createApp({ db, config, deviceSync, pushEnabled = false }) {
   const app = express();
   app.disable('x-powered-by');
   app.use(helmet());
@@ -52,12 +54,27 @@ export function createApp({ db, config, deviceSync }) {
     req.user = user; next();
   });
   app.use('/api', api);
+  api.use('/vehicles', vehicleRouter(db));
   api.get('/attendance', requirePermission('attendance.view'), async (req, res) => {
     const range = attendanceMonthRange(req.query.month);
     const punches = await attendanceRecords(db, String(req.user.epf_no), range.start, ATTENDANCE_SETTINGS, range.end);
     res.json({ month: range.month, timeZone: attendanceTimeZone, method: 'first-last', punches, days: dailyAttendance(punches) });
   });
-  api.post('/logout', async (req, res) => { await db.query('UPDATE login_devices SET signedOutAt=?,updatedAt=? WHERE id=?', [new Date(), new Date(), req.user.session_id]); res.sendStatus(204); });
+  api.get('/push/status', (_req, res) => res.json({ enabled: pushEnabled }));
+  api.put('/push/device', async (req, res) => {
+    await registerPushDevice(db, req.user, req.body); res.sendStatus(204);
+  });
+  api.delete('/push/device', async (req, res) => {
+    await db.query('DELETE FROM ios_push_devices WHERE sessionId=?', [req.user.session_id]); res.sendStatus(204);
+  });
+  api.post('/logout', async (req, res) => {
+    await db.transaction(async tx => {
+      await tx.query('UPDATE login_devices SET signedOutAt=?,updatedAt=? WHERE id=?', [new Date(), new Date(), req.user.session_id]);
+      await tx.query('DELETE FROM ios_push_devices WHERE sessionId=?', [req.user.session_id]);
+      await stopSessionVehicleSharing(tx, req.user.session_id);
+    });
+    res.sendStatus(204);
+  });
   api.get('/snapshot', async (req, res) => {
     const user = req.user;
     const snapshot = await db.transaction(async tx => {
@@ -196,7 +213,7 @@ export function createApp({ db, config, deviceSync }) {
     res.json(await branchDirectory(db));
   });
   api.use('/admin',requireAdministrator);
-  api.get('/admin/employees',async(req,res)=>res.json(await employeeAccounts(db,req.query.search)));
+  api.get('/admin/employees',async(req,res)=>res.json(await employeeAccounts(db,req.query.search,req.query.available==='true')));
   api.post('/admin/employees',async(req,res)=>res.status(201).json(await createAccount(db,req.body??{},req.user.id)));
   api.patch('/admin/employees/:id',async(req,res)=>{
     await updateAccount(db,req.params.id,req.body??{},req.user.id);res.sendStatus(204);

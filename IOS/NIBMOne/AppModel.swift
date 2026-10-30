@@ -18,8 +18,11 @@ final class AppModel: ObservableObject {
     @Published private(set) var notices: [AppNotice] = []
     @Published var storageError: String?
     @Published private(set) var isRemoteSession = false
+    @Published private(set) var pushStatus = "Sign in to enable punch notifications."
     @Published private(set) var isLoading = false
     @Published private(set) var employeeName = "Alex Perera"
+    @Published private(set) var employeeID: UUID?
+    @Published private(set) var employeeDetails = EmployeeProfileDetails()
     @Published private(set) var epfNo = "900001"
     @Published private(set) var branch = "Colombo"
     @Published private(set) var remoteApprovals: [LeaveRequest] = []
@@ -114,6 +117,8 @@ final class AppModel: ObservableObject {
         }
         api = nil; isRemoteSession = false; restoreDemoData()
         self.employeeName = "Alex Perera"; self.epfNo = "900001"; branch = "Colombo"
+        employeeID = nil
+        employeeDetails = .demo
         self.role = role
         attendanceMonth = AttendanceCalendarRules.startOfMonth(Date()); calendarAttendance = demoAttendance
         attendanceError = nil; attendanceUpdatedAt = sampleLoadedAt
@@ -124,6 +129,7 @@ final class AppModel: ObservableObject {
         pendingWidgetTab = nil
         let oldAPI = api
         api = nil
+        pushStatus = "Sign in to enable punch notifications."
         if let oldAPI { Task { _ = try? await oldAPI.send("api/logout"); oldAPI.token = nil } }
         sessionID = UUID(); isAuthenticated = false; isLocked = false
         appLockEnabled = false; selectedTab = 0; role = .employee; permissions = []
@@ -133,6 +139,8 @@ final class AppModel: ObservableObject {
         attendanceUpdatedAt = nil; isAttendanceLoading = false
         attendanceMonth = AttendanceCalendarRules.startOfMonth(Date())
         employeeName = "Alex Perera"; epfNo = "900001"; branch = "Colombo"
+        employeeID = nil
+        employeeDetails = EmployeeProfileDetails()
     }
 
     func openWidgetURL(_ url: URL) {
@@ -140,6 +148,36 @@ final class AppModel: ObservableObject {
               let tab = ["attendance": 1, "leave": 2, "tickets": 3][host] else { return }
         pendingWidgetTab = tab
         if isAuthenticated { navigateFromWidget() }
+    }
+
+    func openPushDestination(_ destination: String) {
+        guard isRemoteSession else { return }
+        let host = destination == "ticket" ? "tickets" : destination
+        if let url = URL(string: "nibmone://\(host)") { openWidgetURL(url) }
+    }
+
+    func registerPushDevice(token: String, environment: String) async {
+        guard let api, isAuthenticated, isRemoteSession else { return }
+        let session = sessionID
+        do {
+            _ = try await api.send("api/push/device", method: "PUT", body: APIClient.encode(PushDeviceBody(token: token, environment: environment)))
+            let status: PushServerStatus = try await api.request("api/push/status")
+            guard session == sessionID else { return }
+            pushStatus = status.enabled ? "Ready for punch notifications." : "Device registered. The server still needs Apple push credentials."
+        } catch {
+            if session == sessionID { pushStatus = "Registration failed: \(error.localizedDescription)" }
+        }
+    }
+
+    func disablePushDevice() async {
+        guard let api, isAuthenticated, isRemoteSession else { return }
+        let session = sessionID
+        do {
+            _ = try await api.send("api/push/device", method: "DELETE")
+            if session == sessionID { pushStatus = "Notifications are disabled in iPhone Settings." }
+        } catch {
+            if session == sessionID { pushStatus = "Could not update notification settings: \(error.localizedDescription)" }
+        }
     }
 
     private func navigateFromWidget() {
@@ -352,8 +390,29 @@ final class AppModel: ObservableObject {
     }
 
     func fingerprintMachines() async throws -> [MachineAdminStatus] { try await remote("api/machines") }
-    func employeeAccounts(search: String = "") async throws -> [EmployeeAccount] {
-        try await remote("api/admin/employees", queryItems: [URLQueryItem(name: "search", value: search)])
+    func vehicleDirectory() async throws -> VehicleDirectory { try await remote("api/vehicles/directory") }
+    func vehicleRequests() async throws -> [VehicleRequest] { try await remote("api/vehicles/requests") }
+    func vehicleDriverTrips() async throws -> [VehicleRequest] { try await remote("api/vehicles/driver-trips") }
+    func vehicleRequest(id: UUID) async throws -> VehicleRequest { try await remote("api/vehicles/requests/\(id.uuidString)") }
+    func submitVehicleRequest(_ body: VehicleRequestBody) async throws -> VehicleRequest {
+        try await remote("api/vehicles/requests", method: "POST", body: APIClient.encode(body))
+    }
+    func vehicleAction(id: UUID, action: String, body: Data? = nil) async throws -> VehicleRequest {
+        try await remote("api/vehicles/requests/\(id.uuidString)/\(action)", method: "POST", body: body)
+    }
+    func vehicleTracking(id: UUID) async throws -> VehicleTracking { try await remote("api/vehicles/requests/\(id.uuidString)/tracking") }
+    func companyVehicles() async throws -> [CompanyVehicle] { try await remote("api/vehicles/fleet") }
+    func addCompanyVehicle(_ body: CompanyVehicleBody) async throws -> CompanyVehicle {
+        try await remote("api/vehicles/fleet", method: "POST", body: APIClient.encode(body))
+    }
+    func sendVehicleLocation(id: UUID, body: VehicleLocationBody) async throws {
+        let _: VehicleLocationReceipt = try await remote("api/vehicles/requests/\(id.uuidString)/location", method: "POST", body: APIClient.encode(body))
+    }
+    func pauseVehicleSharing(id: UUID, sharingKey: String) async throws {
+        let _: VehicleLocationReceipt = try await remote("api/vehicles/requests/\(id.uuidString)/pause", method: "POST", body: APIClient.encode(VehiclePauseBody(sharingKey: sharingKey)))
+    }
+    func employeeAccounts(search: String = "", availableOnly: Bool = false) async throws -> [EmployeeAccount] {
+        try await remote("api/admin/employees", queryItems: [URLQueryItem(name: "search", value: search), URLQueryItem(name: "available", value: availableOnly ? "true" : "false")])
     }
     func createEmployeeAccount(_ body: CreateEmployeeBody) async throws -> CreatedEmployee {
         try await remote("api/admin/employees", method: "POST", body: APIClient.encode(body))
@@ -411,6 +470,8 @@ final class AppModel: ObservableObject {
 
     private func apply(_ snapshot: RemoteSnapshot) {
         employeeName = snapshot.profile.name; epfNo = snapshot.profile.epfNo; branch = snapshot.profile.branch; role = snapshot.profile.role
+        employeeDetails = snapshot.profile.details ?? EmployeeProfileDetails()
+        employeeID = snapshot.profile.id
         permissions = Set(snapshot.profile.permissions ?? Array(role.defaultPermissions))
         if (selectedTab == 1 && !can("attendance.view")) || (selectedTab == 2 && !can("leave.view")) || (selectedTab == 3 && !can("tickets.view")) { selectedTab = 0 }
         leaveRequests = snapshot.state.leaveRequests; tickets = snapshot.state.tickets; notices = snapshot.state.notices

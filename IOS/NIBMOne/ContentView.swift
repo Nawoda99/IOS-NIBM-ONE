@@ -303,6 +303,15 @@ struct HomeView: View {
                         } }
                     }
                     .buttonStyle(.plain)
+                    if model.can("vehicles.request") || model.can("vehicles.recommend") || model.can("vehicles.manage") {
+                        NavigationLink(destination: VehicleRequestsView().toolbar(.visible, for: .navigationBar)) {
+                            HStack {
+                                Label("Vehicle requests", systemImage: "car.side.fill").font(.subheadline.weight(.semibold))
+                                Spacer()
+                                Image(systemName: "chevron.right").font(.caption.weight(.bold))
+                            }.padding(18).background(.white, in: RoundedRectangle(cornerRadius: 18))
+                        }.buttonStyle(.plain)
+                    }
                     if model.can("attendance.view") { AttendanceCalendar() }
                     if model.can("leave.view") || model.can("tickets.view") { overview }
                     NavigationLink(destination: NotificationsView().toolbar(.visible, for: .navigationBar)) {
@@ -753,7 +762,7 @@ struct ApplyLeaveView: View {
         Form {
             Section("Leave details") {
                 Picker("Leave type", selection: $type) { ForEach(LeaveType.allCases) { Text($0.rawValue).tag($0) } }
-                DatePicker("From", selection: $start, in: Calendar.current.startOfDay(for: Date())..., displayedComponents: .date)
+                DatePicker("From", selection: $start, displayedComponents: .date)
                 DatePicker("To", selection: $end, in: Calendar.current.startOfDay(for: start)..., displayedComponents: .date).disabled(halfDay)
                 Toggle("Half-day", isOn: $halfDay)
                 TextField("Reason", text: $reason, axis: .vertical)
@@ -1045,6 +1054,15 @@ struct MoreView: View {
                 NavigationLink(destination: NotificationsView()) { Label("Notifications", systemImage: "bell") }
                 NavigationLink(destination: ProfileView()) { Label("Employee profile", systemImage: "person") }
                 NavigationLink(destination: SettingsView()) { Label("Settings", systemImage: "gearshape") }
+                if model.can("vehicles.request") || model.can("vehicles.recommend") || model.can("vehicles.manage") {
+                    NavigationLink(destination: VehicleRequestsView()) { Label("Vehicle requests", systemImage: "car.side.fill") }
+                }
+                if model.isRemoteSession {
+                    NavigationLink(destination: DriverModeView()) { Label("Driver mode", systemImage: "steeringwheel") }
+                }
+                if model.isRemoteSession && model.can("vehicles.manage") {
+                    NavigationLink(destination: CompanyVehiclesView()) { Label("Company vehicles", systemImage: "car.2.fill") }
+                }
                 if model.can("map.view") { NavigationLink(destination: TicketMapView()) { Label("Branches and my location", systemImage: "map") } }
                 if model.can("leave.approve") { NavigationLink(destination: LeaveApprovalsView()) { Label("Leave approvals", systemImage: "checkmark.seal") } }
                 if model.isRemoteSession && model.can("machines.manage") {
@@ -1060,7 +1078,10 @@ struct MoreView: View {
                 Section { Button(role: .destructive) { confirmSignOut = true } label: { Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right").frame(minHeight: 44) } }
                 Text("\(model.role.rawValue) · \(model.isRemoteSession ? "Employee account" : "Local demo")").font(.caption).foregroundStyle(.secondary)
             }.navigationTitle("More").navigationBarTitleDisplayMode(.inline).tint(.nibmBlue).task { await model.refreshRemote() }
-                .confirmationDialog("Sign out of NIBM ONE?", isPresented: $confirmSignOut, titleVisibility: .visible) { Button("Sign out", role: .destructive) { model.signOut() } }
+                .alert("Sign out of NIBM ONE?", isPresented: $confirmSignOut) {
+                    Button("Cancel", role: .cancel) { }
+                    Button("Sign out", role: .destructive) { model.signOut() }
+                }
         }
     }
 }
@@ -1094,6 +1115,7 @@ struct NoticeDetailView: View {
 
 struct ProfileView: View {
     @EnvironmentObject private var model: AppModel
+    private var details: EmployeeProfileDetails { model.employeeDetails }
     var body: some View {
         Form {
             Section {
@@ -1103,14 +1125,97 @@ struct ProfileView: View {
                     Text("EPF \(model.epfNo)").font(.subheadline).foregroundStyle(.secondary)
                 }.padding(.vertical, 12)
             }
-            Section("Employment") {
-                LabeledContent("Branch", value: model.branch.isEmpty ? "Not assigned" : model.branch)
-                LabeledContent("Role", value: model.role.rawValue)
+            Section("Personal information") {
+                ProfileDetailRow("Full name", value: model.employeeName)
+                ProfileDetailRow("Title", value: details.title)
+                ProfileDetailRow("First name", value: details.firstName)
+                ProfileDetailRow("Last name", value: details.lastName)
+                ProfileDetailRow("Initials", value: details.initials)
+                ProfileDetailRow("Gender", value: details.gender)
+                ProfileDetailRow("Identity number", value: details.identityNumber)
+                ProfileDetailRow("Passport number", value: details.passportNumber)
+            }
+            Section("Employment information") {
+                ProfileDetailRow("EPF number", value: model.epfNo)
+                ProfileDetailRow("Previous EPF number", value: details.previousEPFNumber)
+                ProfileDetailRow("ERP employee ID", value: details.erpEmployeeID)
+                ProfileDetailRow("Branch", value: model.branch)
+                ProfileDetailRow("Department", value: details.department)
+                ProfileDetailRow("Employment type", value: details.employmentType)
+                ProfileDetailRow("Grade", value: details.grade)
+                ProfileDetailRow("Employment status", value: details.employmentStatus)
+                ProfileDetailRow("Joined date", value: EmployeeProfileDetails.displayDate(details.joinedDate))
+                ProfileDetailRow("Appointment date", value: EmployeeProfileDetails.displayDate(details.appointmentDate))
+                ProfileDetailRow("Probation end date", value: EmployeeProfileDetails.displayDate(details.probationEndDate))
+                ProfileDetailRow("Assignment start date", value: EmployeeProfileDetails.displayDate(details.assignmentStartDate))
+                ProfileDetailRow("App role", value: model.role.rawValue)
+            }
+            Section("Contact information") {
+                ProfileDetailRow("Official email", value: details.officialEmail)
+                ProfileDetailRow("Personal email", value: details.personalEmail)
+                ProfileDetailRow("Mobile number", value: details.primaryMobile)
+                ProfileDetailRow("Alternate mobile", value: details.secondaryMobile)
+                ProfileDetailRow("Telephone number", value: details.primaryTelephone)
+                ProfileDetailRow("Alternate telephone", value: details.secondaryTelephone)
+                ProfileDetailRow("Primary address", value: details.primaryAddress)
+                ProfileDetailRow("Secondary address", value: details.secondaryAddress)
+            }
+            Section("Emergency contact") {
+                ProfileDetailRow("Contact name", value: details.emergencyContactName)
+                ProfileDetailRow("Relationship", value: details.emergencyContactRelationship)
+                ProfileDetailRow("Phone number", value: details.emergencyContactPhone)
+                ProfileDetailRow("Address", value: details.emergencyContactAddress)
+            }
+            if !model.isRemoteSession {
+                Section { Text("Demo profile. Sign in with your employee account to see your HR information.").font(.caption).foregroundStyle(.secondary) }
             }
             if model.isRemoteSession && model.role == .administrator {
                 Section("Administration") { NavigationLink("Manage employee accounts", destination: EmployeeAccountsView()); NavigationLink("Roles and permissions", destination: RolePermissionsView()) }
             }
         }.navigationTitle("Employee profile").navigationBarTitleDisplayMode(.inline).tint(.nibmBlue)
+            .refreshable { await model.refreshRemote() }
+            .task { await model.refreshRemote() }
+    }
+}
+
+private struct ProfileDetailRow: View {
+    let title: String
+    let value: String?
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
+
+    init(_ title: String, value: String?) { self.title = title; self.value = value }
+
+    private var text: String? {
+        guard let value else { return nil }
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return trimmed.isEmpty ? nil : trimmed
+    }
+
+    var body: some View {
+        Group {
+            if dynamicTypeSize.isAccessibilitySize {
+                stackedContent
+            } else {
+                ViewThatFits(in: .horizontal) {
+                    HStack(alignment: .firstTextBaseline, spacing: 20) {
+                        Text(title).fixedSize()
+                        Spacer(minLength: 0)
+                        Text(text ?? "Not provided").foregroundStyle(.secondary).fixedSize()
+                    }
+                    stackedContent
+                }
+            }
+        }
+        .textSelection(.enabled)
+        .padding(.vertical, 2)
+        .accessibilityElement(children: .combine)
+    }
+
+    private var stackedContent: some View {
+        VStack(alignment: .leading, spacing: 6) {
+            Text(title)
+            Text(text ?? "Not provided").foregroundStyle(.secondary).fixedSize(horizontal: false, vertical: true)
+        }.frame(maxWidth: .infinity, alignment: .leading)
     }
 }
 

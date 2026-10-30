@@ -16,7 +16,7 @@ export async function ensureBranch(db, description) {
   return (await db.query('INSERT INTO branch (description,createdAt,updatedAt) VALUES (?,?,?)', [description, new Date(), new Date()])).insertId;
 }
 export async function ensureDepartment(db, description) {
-  const [existing] = await db.query('SELECT id FROM department WHERE description=? ORDER BY id LIMIT 1', [description]);
+  const [existing] = await db.query("SELECT id FROM department WHERE description=? OR (?='IT' AND prefix='IT') ORDER BY id LIMIT 1", [description,description]);
   if (existing) return existing.id;
   return (await db.query('INSERT INTO department (description,ticketing_enabled,createdAt,updatedAt) VALUES (?,1,?,?)', [description, new Date(), new Date()])).insertId;
 }
@@ -40,10 +40,13 @@ export async function createEmployee(db, { epfNo, name, branch, role, passwordHa
   });
 }
 export const employeeSelect = `SELECT e.*,e.full_name AS name,b.description AS branch,c.password AS password_hash,
+  d.description AS department_name,et.name AS employment_type_name,g.name AS grade_name,g.code AS grade_code,
   CASE WHEN EXISTS (SELECT 1 FROM employee_system_roles er JOIN system_roles r ON r.id=er.role_id WHERE er.employee_id=e.id AND r.code IN ('ADMINISTRATOR','ADMIN') AND COALESCE(r.status,1)=1) THEN 'Administrator'
     WHEN EXISTS (SELECT 1 FROM employee_system_roles er JOIN system_roles r ON r.id=er.role_id WHERE er.employee_id=e.id AND r.code='SUPPORT' AND COALESCE(r.status,1)=1) THEN 'Support'
     WHEN EXISTS (SELECT 1 FROM employee_system_roles er JOIN system_roles r ON r.id=er.role_id WHERE er.employee_id=e.id AND r.code='APPROVER' AND COALESCE(r.status,1)=1) THEN 'Approver' ELSE 'Employee' END AS role
-  FROM employees e LEFT JOIN branch b ON b.id=e.branch_id JOIN user_credentials c ON c.employeeId=e.id`;
+  FROM employees e LEFT JOIN branch b ON b.id=e.branch_id JOIN user_credentials c ON c.employeeId=e.id
+  LEFT JOIN department d ON d.id=e.department_id LEFT JOIN employee_types et ON et.id=e.employee_type_id
+  LEFT JOIN grades g ON g.id=e.grade_id`;
 export async function seedLeaveTypes(db) {
   for (const name of Object.keys(entitlements)) {
     if (!(await db.query('SELECT id FROM leave_type WHERE name=?', [name])).length) await db.query(`INSERT INTO leave_type
@@ -83,7 +86,7 @@ async function ticketValue(db, row) {
   const events = activities.filter(item => details(item.details).kind !== 'comment' && statusToApp[item.to_status]).map(item => ({ id: appID(item.id), status: statusToApp[item.to_status], date: iso(item.createdAt) }));
   const [photo] = await db.query('SELECT * FROM ticket_attachments WHERE ticket_id=?', [row.id]);
   const [assignment] = await db.query('SELECT e.full_name FROM ticket_assignments a JOIN employees e ON e.id=a.employee_id WHERE a.ticket_id=? ORDER BY a.id DESC LIMIT 1', [row.id]);
-  return { id: appID(row.id), number: row.ticket_number, title: row.title, description: row.description, category: row.category,
+  return { id: appID(row.id), number: row.ticket_number, title: row.title, description: row.description, category: row.category === 'Information Technology' ? 'IT' : row.category,
     room: metadata.room ?? '', assetID: metadata.assetID ?? '', priority: ['high', 'urgent'].includes(row.priority) ? 'High' : 'Normal', status: statusToApp[row.status] ?? 'Open',
     updatedAt: iso(row.updatedAt), coordinate: metadata.coordinate ?? null, assignedTo: assignment?.full_name ?? null,
     photo: photo ? { id: appID(photo.id), name: photo.original_name, data: photo.data.toString('base64') } : null, comments, events };

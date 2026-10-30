@@ -16,7 +16,8 @@
     "postinstall": "patch-package",
     "test:mysql": "node scripts/run-mysql-check.js",
     "employee:create": "node scripts/create-employee.js",
-    "admin:grant": "node scripts/grant-admin.js"
+    "admin:grant": "node scripts/grant-admin.js",
+    "reference:import": "node scripts/import-reference-data.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

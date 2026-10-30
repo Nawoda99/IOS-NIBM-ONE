@@ -14,7 +14,8 @@
 </dict></array>
 <key>NSCameraUsageDescription</key><string>Scan room and asset QR codes for service requests.</string>
 <key>NSFaceIDUsageDescription</key><string>Unlock your NIBM ONE session with Face ID.</string>
-<key>NSLocationWhenInUseUsageDescription</key><string>Attach your selected location to a service request.</string>
+<key>NSLocationWhenInUseUsageDescription</key><string>Attach a location to a service request, or share your assigned company vehicle's location while you choose to run a trip.</string>
+<key>UIBackgroundModes</key><array><string>location</string></array>
 <key>NSLocalNetworkUsageDescription</key><string>Connect to your NIBM ONE server on the local network.</string>
 <key>NSAppTransportSecurity</key><dict>
 <key>NSAllowsLocalNetworking</key><true/>

@@ -3,6 +3,8 @@ import bcrypt from 'bcryptjs';
 import { defineModels } from './models.js';
 import { createEmployee, seedLeaveTypes } from './records.js';
 import { backupTables } from './backup-schema.js';
+import { pushTables } from './push-schema.js';
+import { vehicleTables } from './vehicle-schema.js';
 
 function databaseError(error) {
   // Preserve the driver's error code for the existing HTTP/startup error handlers.
@@ -76,17 +78,18 @@ export async function initializeDatabase(config) {
   }
 }
 export async function migrate(db) {
-  const names = new Set(backupTables.map(table => table.name));
+  const tables = [...backupTables, ...pushTables, ...vehicleTables];
+  const names = new Set(tables.map(table => table.name));
   const present = new Set((await db.query('SHOW TABLES')).map(row => Object.values(row)[0]));
   const extra = [...present].filter(name => !names.has(name));
   if (extra.length) throw new Error('The selected database contains tables outside the exact backup subset. Use a fresh DATABASE_NAME; existing data was preserved.');
-  for (const table of backupTables) {
+  for (const table of tables) {
     if (present.has(table.name)) {
       const [row] = await db.query('SHOW CREATE TABLE ' + db.sequelize.getQueryInterface().queryGenerator.quoteIdentifier(table.name));
       if (normalizeDDL(row['Create Table']) !== normalizeDDL(table.ddl)) throw new Error('Schema mismatch in ' + table.name + '. Use a fresh exact-schema database; existing data was preserved.');
     }
   }
-  for (const table of backupTables) if (!present.has(table.name)) await db.query(table.ddl);
+  for (const table of tables) if (!present.has(table.name)) await db.query(table.ddl);
   await seedLeaveTypes(db);
 }
 export function normalizeDDL(value) {

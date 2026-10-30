@@ -7,6 +7,7 @@ struct RemoteProfile: Codable {
     let branch: String
     let role: EmployeeRole
     let permissions: [String]?
+    let details: EmployeeProfileDetails?
 }
 struct EmployeeAccount: Decodable, Identifiable {
     let id: UUID
@@ -19,12 +20,9 @@ struct EmployeeAccount: Decodable, Identifiable {
     let isActive: Bool
 }
 struct CreateEmployeeBody: Encodable {
-    let epfNo: String
-    let name: String
-    let identityNo: String
+    let employeeID: UUID
     let password: String
     let role: EmployeeRole
-    let branchID: Int?
 }
 struct CreatedEmployee: Decodable { let id: UUID; let epfNo: String }
 struct UpdateEmployeeBody: Encodable {
@@ -68,6 +66,8 @@ struct RemoteAttendanceMonth: Decodable {
     let punches: [Punch]
 }
 struct LoginBody: Encodable { let epfNo: String; let password: String }
+struct PushDeviceBody: Encodable { let token: String; let environment: String }
+struct PushServerStatus: Decodable { let enabled: Bool }
 struct LeaveBody: Encodable { let type: LeaveType; let start: Date; let end: Date; let halfDay: Bool; let reason: String; let attachment: Attachment? }
 struct DecisionBody: Encodable { let approve: Bool; let reason: String }
 struct TicketBody: Encodable {

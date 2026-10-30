@@ -1,15 +1,62 @@
 import Foundation
 
+struct EmployeeProfileDetails: Codable {
+    var firstName: String?
+    var lastName: String?
+    var initials: String?
+    var title: String?
+    var gender: String?
+    var identityNumber: String?
+    var passportNumber: String?
+    var department: String?
+    var employmentType: String?
+    var grade: String?
+    var employmentStatus: String?
+    var previousEPFNumber: String?
+    var erpEmployeeID: String?
+    var joinedDate: String?
+    var appointmentDate: String?
+    var probationEndDate: String?
+    var assignmentStartDate: String?
+    var officialEmail: String?
+    var personalEmail: String?
+    var primaryMobile: String?
+    var secondaryMobile: String?
+    var primaryTelephone: String?
+    var secondaryTelephone: String?
+    var primaryAddress: String?
+    var secondaryAddress: String?
+    var emergencyContactName: String?
+    var emergencyContactPhone: String?
+    var emergencyContactAddress: String?
+    var emergencyContactRelationship: String?
+
+    static let demo = EmployeeProfileDetails(firstName: "Alex", lastName: "Perera", initials: "A.P.")
+
+    static func displayDate(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let formatter = DateFormatter()
+        formatter.calendar = Calendar(identifier: .gregorian)
+        formatter.locale = Locale(identifier: "en_LK")
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.dateFormat = "yyyy-MM-dd"
+        formatter.isLenient = false
+        guard let date = formatter.date(from: value) else { return nil }
+        formatter.dateFormat = "dd MMM yyyy"
+        return formatter.string(from: date)
+    }
+}
+
 enum EmployeeRole: String, CaseIterable, Identifiable, Codable {
     case employee = "Employee", approver = "Approver", support = "Support", administrator = "Administrator"
     var id: String { rawValue }
     var defaultPermissions: Set<String> {
-        let own: Set<String> = ["attendance.view", "leave.view", "leave.apply", "tickets.view", "tickets.create", "map.view"]
+        let own: Set<String> = ["attendance.view", "leave.view", "leave.apply", "tickets.view", "tickets.create", "map.view", "vehicles.request"]
         switch self {
         case .employee: return own
-        case .approver: return own.union(["leave.approve", "machines.manage"])
+        case .approver: return own.union(["leave.approve", "machines.manage", "vehicles.recommend"])
         case .support: return own.union(["tickets.manage", "machines.manage"])
-        case .administrator: return own.union(["leave.approve", "tickets.manage", "machines.manage", "users.manage", "roles.manage", "branches.manage"])
+        case .administrator: return own.union(["leave.approve", "tickets.manage", "machines.manage", "users.manage", "roles.manage", "branches.manage", "vehicles.recommend", "vehicles.manage"])
         }
     }
 }
@@ -190,9 +237,6 @@ enum LeaveRules {
     static func validate(start: Date, end: Date, halfDay: Bool, reason: String, balance: Double,
                          requests: [LeaveRequest], today: Date = Date(), calendar: Calendar = .current) throws -> Double {
         let days = try requestedDays(from: start, to: end, halfDay: halfDay, calendar: calendar)
-        guard calendar.startOfDay(for: start) >= calendar.startOfDay(for: today) else {
-            throw FormError.invalid("Choose today or a future date.")
-        }
         guard calendar.component(.year, from: start) == calendar.component(.year, from: end) else {
             throw FormError.invalid("Submit separate requests for different calendar years.")
         }

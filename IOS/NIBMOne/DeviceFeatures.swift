@@ -224,6 +224,8 @@ struct TicketLocationView: View {
 }
 
 struct NotificationSettingsView: View {
+    @EnvironmentObject private var model: AppModel
+    @EnvironmentObject private var push: PushNotifications
     @State private var authorization = UNAuthorizationStatus.notDetermined
     @State private var error: String?
     var body: some View {
@@ -232,13 +234,26 @@ struct NotificationSettingsView: View {
                 LabeledContent("Notifications", value: status)
                 Button("Request notification permission") {
                     Task {
-                        do { _ = try await UNUserNotificationCenter.current().requestAuthorization(options: [.alert, .sound, .badge]); await refresh() }
+                        do { try await push.register(requestPermission: true); await refresh() }
                         catch { self.error = error.localizedDescription }
                     }
                 }.disabled(authorization != .notDetermined)
                 if let url = URL(string: UIApplication.openSettingsURLString) { Link("Open iPhone Settings", destination: url) }
             }
-            Text("Permission alone does not enable remote notifications. APNs registration and backend delivery are not implemented in this build.").font(.caption).foregroundStyle(.secondary)
+            Section("Punch notifications") {
+                Text(model.isRemoteSession ? model.pushStatus : "Sign in with your employee account to receive punch notifications.")
+                if let message = push.registrationError { Text(message).foregroundStyle(.red) }
+                Button("Retry registration") {
+                    Task {
+                        do {
+                            try await push.register(requestPermission: true)
+                            if let token = push.deviceToken { await model.registerPushDevice(token: token, environment: PushNotifications.environment) }
+                            await refresh()
+                        } catch { self.error = error.localizedDescription }
+                    }
+                }.disabled(!model.isRemoteSession || authorization == .denied)
+                Text("New punches notify this iPhone after the fingerprint machine syncs. Tap the notification to open Attendance.").font(.caption).foregroundStyle(.secondary)
+            }
         }.navigationTitle("Notification settings").task { await refresh() }.errorAlert($error)
     }
     private var status: String {

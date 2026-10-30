@@ -14,7 +14,7 @@ struct EmployeeAccountsView: View {
                 Section {
                     Button { showCreate = true } label: { Label("Create employee login", systemImage: "person.badge.plus").frame(maxWidth: .infinity, minHeight: 48) }
                         .buttonStyle(.borderedProminent)
-                    Text("Create an employee or enable login for an existing EPF. Only Administrators can change roles.").font(.caption).foregroundStyle(.secondary)
+                    Text("Select an existing employee and create their login. Employee records are maintained separately.").font(.caption).foregroundStyle(.secondary)
                 }
                 Section("Employees") {
                     if isLoading { ProgressView("Loading employees") }
@@ -60,36 +60,39 @@ struct CreateEmployeeLoginView: View {
     @Environment(\.dismiss) private var dismiss
     let employee: EmployeeAccount?
     let onCreated: () -> Void
-    @State private var epf = ""
-    @State private var name = ""
-    @State private var identity = ""
+    @State private var selectedID: UUID?
+    @State private var candidates: [EmployeeAccount] = []
+    @State private var loadingEmployees = false
     @State private var password = ""
     @State private var role: EmployeeRole = .employee
-    @State private var branchID = 0
-    @State private var branches: [BranchLocation] = []
     @State private var saving = false
     @State private var error: String?
     init(employee: EmployeeAccount? = nil, onCreated: @escaping () -> Void) {
         self.employee = employee; self.onCreated = onCreated
-        _epf = State(initialValue: employee?.epfNo ?? "")
-        _name = State(initialValue: employee?.name ?? "")
-        _branchID = State(initialValue: employee?.branchID ?? 0)
+        _selectedID = State(initialValue: employee?.id)
+        _candidates = State(initialValue: employee.map { [$0] } ?? [])
     }
     private var valid: Bool {
-        !epf.isEmpty && password.count >= 8 && (employee != nil || (!name.trimmingCharacters(in: .whitespaces).isEmpty && !identity.trimmingCharacters(in: .whitespaces).isEmpty))
+        selectedID != nil && password.count >= 8 && !loadingEmployees
     }
     var body: some View {
         Form {
             Section("Employee") {
-                TextField("EPF number", text: $epf).keyboardType(.numberPad).disabled(employee != nil)
-                TextField("Full name", text: $name).disabled(employee != nil)
-                if employee == nil { TextField("Actual identity number", text: $identity).textInputAutocapitalization(.characters).autocorrectionDisabled() }
-                else { Text("Existing employee details will be preserved.").font(.caption).foregroundStyle(.secondary) }
+                if loadingEmployees { ProgressView("Loading existing employees") }
+                Picker("Select employee", selection: $selectedID) {
+                    Text("Choose an employee").tag(Optional<UUID>.none)
+                    ForEach(candidates) { candidate in Text("\(candidate.epfNo) · \(candidate.name)").tag(Optional(candidate.id)) }
+                }.disabled(employee != nil)
+                if let selected = candidates.first(where: { $0.id == selectedID }) {
+                    LabeledContent("EPF number", value: selected.epfNo)
+                    Text(selected.name).font(.subheadline)
+                }
+                Text("Only active employees without a login are selectable. Employee name, identity number and employment details are not changed.").font(.caption).foregroundStyle(.secondary)
+                if !loadingEmployees && candidates.isEmpty { Text("All available employees already have logins. Add the employee record through your employee management system first.").font(.caption).foregroundStyle(.orange) }
             }
             Section("Login access") {
                 SecureField("Password (at least 8 characters)", text: $password).textContentType(.newPassword).textInputAutocapitalization(.never).autocorrectionDisabled()
                 Picker("Role", selection: $role) { ForEach(EmployeeRole.allCases) { Text($0.rawValue).tag($0) } }
-                if employee == nil { Picker("Branch", selection: $branchID) { Text("Not assigned").tag(0); ForEach(branches) { Text($0.name).tag($0.id) } } }
                 Text("Administrator can manage accounts and permissions. Approver can decide leave; Support can manage tickets, subject to role permissions.").font(.caption).foregroundStyle(.secondary)
             }
             Section {
@@ -98,7 +101,8 @@ struct CreateEmployeeLoginView: View {
                     Task {
                         defer { saving = false }
                         do {
-                            _ = try await model.createEmployeeAccount(CreateEmployeeBody(epfNo: epf, name: name, identityNo: identity, password: password, role: role, branchID: branchID == 0 ? nil : branchID))
+                            guard let selectedID else { return }
+                            _ = try await model.createEmployeeAccount(CreateEmployeeBody(employeeID: selectedID, password: password, role: role))
                             password = ""; onCreated(); dismiss()
                         } catch { self.error = error.localizedDescription }
                     }
@@ -108,7 +112,13 @@ struct CreateEmployeeLoginView: View {
         }
         .disabled(saving).navigationTitle("Create employee login").navigationBarTitleDisplayMode(.inline)
         .toolbar { ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() }.disabled(saving) } }
-        .task { do { branches = try await model.branchDirectory().branches } catch { self.error = error.localizedDescription } }
+        .task {
+            guard employee == nil else { return }
+            loadingEmployees = true
+            defer { loadingEmployees = false }
+            do { candidates = try await model.employeeAccounts(availableOnly: true) }
+            catch { self.error = error.localizedDescription }
+        }
         .errorAlert($error)
     }
 }

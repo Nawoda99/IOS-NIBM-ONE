@@ -14,10 +14,13 @@ export const permissionCatalog = [
   ['tickets.create','Create tickets','Submit tickets and scan assets'],
   ['tickets.manage','Support workflow','View and progress authorised service requests'],
   ['map.view','Branch and ticket map','View campuses, ticket pins and current location'],
-  ['machines.manage','Fingerprint machines','Inspect and synchronise registered machines']
+  ['machines.manage','Fingerprint machines','Inspect and synchronise registered machines'],
+  ['vehicles.request','Vehicle requests','Request a vehicle and view own trips'],
+  ['vehicles.recommend','Vehicle recommendations','Recommend requests addressed to you'],
+  ['vehicles.manage','Company vehicles','Approve requests, manage vehicles, assign drivers and track active trips']
 ].map(([id,title,description])=>({id,title,description}));
-const employee=['attendance.view','leave.view','leave.apply','tickets.view','tickets.create','map.view'];
-export const defaults={Employee:employee,Approver:[...employee,'leave.approve','machines.manage'],Support:[...employee,'tickets.manage','machines.manage']};
+const employee=['attendance.view','leave.view','leave.apply','tickets.view','tickets.create','map.view','vehicles.request'];
+export const defaults={Employee:employee,Approver:[...employee,'leave.approve','machines.manage','vehicles.recommend'],Support:[...employee,'tickets.manage','machines.manage']};
 const adminPermissions=[...permissionCatalog.map(p=>p.id),'users.manage','roles.manage','branches.manage'];
 const queues=new Map();
 function file(db,name){

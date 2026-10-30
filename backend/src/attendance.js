@@ -4,6 +4,7 @@ import { ensureBranch } from './records.js';
 import { HTTPError, iso, normalisedPunch, required } from './rules.js';
 import { appID, canonicalEPF } from './identity.js';
 import { saveRawPunch, readRawPunch } from './files.js';
+import { enqueuePunchNotification } from './push.js';
 
 export const machineSelect = `SELECT m.*,b.description AS branch,c.companyId FROM punch_machine m
   JOIN companybranch c ON c.id=m.companyBranchId JOIN branch b ON b.id=c.branchId`;
@@ -70,13 +71,16 @@ export async function importPunches(db, code, input, complete = true, settings =
       const flag = punch.rawPunch == null ? punch.direction : String(punch.rawPunch);
       let [row] = await tx.query(`SELECT sr FROM punches WHERE emp_epf_no=? AND pun_machine_id=? AND pun_date=? AND pun_time=?
         AND (pun_flag=? OR pun_flag IS NULL) AND COALESCE(manual,0)=0 ORDER BY sr LIMIT 1 FOR UPDATE`, [Number(punch.epfNo), id, local.toISODate(), local.toFormat('HH:mm:ss'), flag]);
+      const isNew = !row;
       if (row) totals.duplicates++;
       else {
         row = { sr: (await tx.query(`INSERT INTO punches (pun_date,pun_time,emp_epf_no,pun_machine_id,pun_flag,company_id,downloaded_on,original_epf_no)
           VALUES (?,?,?,?,?,?,?,?)`, [local.toISODate(), local.toFormat('HH:mm:ss'), Number(punch.epfNo), id, flag, String(machine.companyId), new Date(), Number(punch.epfNo)])).insertId };
         totals.inserted++;
       }
-      if (!(await tx.query('SELECT id FROM employees WHERE epf_no=?', [Number(punch.epfNo)])).length) totals.unmapped++;
+      const [employee] = await tx.query('SELECT id FROM employees WHERE epf_no=?', [Number(punch.epfNo)]);
+      if (!employee) totals.unmapped++;
+      else if (isNew) await enqueuePunchNotification(tx, employee.id, row.sr, punch, machine);
       evidence.push({ sr: row.sr, punch });
     }
     return totals;
