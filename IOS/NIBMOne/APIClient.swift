@@ -6,7 +6,46 @@ struct RemoteProfile: Codable {
     let name: String
     let branch: String
     let role: EmployeeRole
+    let permissions: [String]?
 }
+struct EmployeeAccount: Decodable, Identifiable {
+    let id: UUID
+    let epfNo: String
+    let name: String
+    let branchID: Int?
+    let branch: String
+    let role: EmployeeRole
+    let hasLogin: Bool
+    let isActive: Bool
+}
+struct CreateEmployeeBody: Encodable {
+    let epfNo: String
+    let name: String
+    let identityNo: String
+    let password: String
+    let role: EmployeeRole
+    let branchID: Int?
+}
+struct CreatedEmployee: Decodable { let id: UUID; let epfNo: String }
+struct UpdateEmployeeBody: Encodable {
+    let role: EmployeeRole
+    let branchID: Int?
+    func encode(to encoder: Encoder) throws {
+        var values = encoder.container(keyedBy: CodingKeys.self)
+        try values.encode(role, forKey: .role)
+        if let branchID { try values.encode(branchID, forKey: .branchID) }
+        else { try values.encodeNil(forKey: .branchID) }
+    }
+    private enum CodingKeys: String, CodingKey { case role, branchID }
+}
+struct PermissionDefinition: Decodable, Identifiable { let id: String; let title: String; let description: String }
+struct RolePermission: Decodable { let role: EmployeeRole; let permissions: [String] }
+struct PermissionDirectory: Decodable { let permissions: [PermissionDefinition]; let roles: [RolePermission] }
+struct PermissionBody: Encodable { let permissions: [String] }
+struct BranchLocation: Decodable, Identifiable { let id: Int; let name: String; let address: String; let coordinate: Coordinate? }
+struct NIBMCampus: Decodable, Identifiable { let id: String; let name: String; let address: String }
+struct BranchDirectory: Decodable { let branches: [BranchLocation]; let campuses: [NIBMCampus]; let sourceURL: String }
+struct BranchLocationBody: Encodable { let address: String; let coordinate: Coordinate }
 struct LoginResponse: Decodable { let token: String; let profile: RemoteProfile }
 struct MachineSync: Decodable, Identifiable {
     var id: String { code }

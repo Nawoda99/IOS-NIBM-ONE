@@ -6,7 +6,7 @@ import { saveLeaveAttachment, readLeaveAttachment } from './files.js';
 
 export const statusToNative = { Open: 'new', Assigned: 'assigned', 'In Progress': 'in_progress', Resolved: 'resolved', Closed: 'closed' };
 const statusToApp = { new: 'Open', assigned: 'Assigned', in_progress: 'In Progress', resolved: 'Resolved', closed: 'Closed', on_hold: 'In Progress', cancelled: 'Closed', supervisor_rejected: 'Closed', pending_supervisor_approval: 'Open' };
-const roleCodes = { Employee: 'EMPLOYEE', Approver: 'APPROVER', Support: 'SUPPORT' };
+const roleCodes = { Employee: 'EMPLOYEE', Approver: 'APPROVER', Support: 'SUPPORT', Administrator: 'ADMINISTRATOR' };
 const json = value => typeof value === 'string' ? JSON.parse(value) : value;
 const details = value => { try { return json(value) ?? {}; } catch { return {}; } };
 
@@ -40,7 +40,8 @@ export async function createEmployee(db, { epfNo, name, branch, role, passwordHa
   });
 }
 export const employeeSelect = `SELECT e.*,e.full_name AS name,b.description AS branch,c.password AS password_hash,
-  CASE WHEN EXISTS (SELECT 1 FROM employee_system_roles er JOIN system_roles r ON r.id=er.role_id WHERE er.employee_id=e.id AND r.code='SUPPORT' AND COALESCE(r.status,1)=1) THEN 'Support'
+  CASE WHEN EXISTS (SELECT 1 FROM employee_system_roles er JOIN system_roles r ON r.id=er.role_id WHERE er.employee_id=e.id AND r.code IN ('ADMINISTRATOR','ADMIN') AND COALESCE(r.status,1)=1) THEN 'Administrator'
+    WHEN EXISTS (SELECT 1 FROM employee_system_roles er JOIN system_roles r ON r.id=er.role_id WHERE er.employee_id=e.id AND r.code='SUPPORT' AND COALESCE(r.status,1)=1) THEN 'Support'
     WHEN EXISTS (SELECT 1 FROM employee_system_roles er JOIN system_roles r ON r.id=er.role_id WHERE er.employee_id=e.id AND r.code='APPROVER' AND COALESCE(r.status,1)=1) THEN 'Approver' ELSE 'Employee' END AS role
   FROM employees e LEFT JOIN branch b ON b.id=e.branch_id JOIN user_credentials c ON c.employeeId=e.id`;
 export async function seedLeaveTypes(db) {

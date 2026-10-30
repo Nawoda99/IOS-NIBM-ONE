@@ -1,8 +1,17 @@
 import Foundation
 
 enum EmployeeRole: String, CaseIterable, Identifiable, Codable {
-    case employee = "Employee", approver = "Approver", support = "Support"
+    case employee = "Employee", approver = "Approver", support = "Support", administrator = "Administrator"
     var id: String { rawValue }
+    var defaultPermissions: Set<String> {
+        let own: Set<String> = ["attendance.view", "leave.view", "leave.apply", "tickets.view", "tickets.create", "map.view"]
+        switch self {
+        case .employee: return own
+        case .approver: return own.union(["leave.approve", "machines.manage"])
+        case .support: return own.union(["tickets.manage", "machines.manage"])
+        case .administrator: return own.union(["leave.approve", "tickets.manage", "machines.manage", "users.manage", "roles.manage", "branches.manage"])
+        }
+    }
 }
 
 enum AttendanceStatus: String, CaseIterable, Identifiable, Codable {

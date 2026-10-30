@@ -161,6 +161,7 @@ final class LocationProvider: NSObject, ObservableObject, CLLocationManagerDeleg
     }
     func request() {
         guard !isRequesting else { return }
+        error = nil
         isRequesting = true
         switch manager.authorizationStatus {
         case .notDetermined: manager.requestWhenInUseAuthorization()

@@ -13,7 +13,7 @@ struct RootView: View {
         Group {
             if !hasCompletedOnboarding {
                 VStack(spacing: 24) {
-                    Image(systemName: "building.2.crop.circle.fill").font(.system(size: 80)).foregroundStyle(Color.nibmBlue)
+                    Image("NIBMOneMark").resizable().scaledToFit().frame(width: 100, height: 100).accessibilityHidden(true)
                     Text("Welcome to NIBM ONE").font(.largeTitle.bold())
                     Text("Review attendance, apply for leave and follow service requests in one place.")
                     Text("Connect to your MySQL backend for employee records and imported machine punches, or explore local demo data.").foregroundStyle(.secondary)
@@ -39,38 +39,177 @@ struct LoginView: View {
     @State private var password = ""
     @State private var role: EmployeeRole = .employee
     @State private var error: String?
+    @State private var showPassword = false
+    @State private var showConnectionSettings = false
+    @FocusState private var focusedField: Field?
     @AppStorage("useMySQLBackend") private var useServer = AppConfiguration.current.useMySQLBackend
     @AppStorage("backendURL") private var serverURL = AppConfiguration.current.apiBaseURL
+    private enum Field: Hashable { case epf, password }
+    private let accent = Color(red: 0.02, green: 0.39, blue: 0.94)
+    private var canSignIn: Bool {
+        !epfNo.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty && !password.isEmpty && !model.isLoading
+    }
+
     var body: some View {
         NavigationStack {
-            ScrollView {
-                VStack(alignment: .leading, spacing: 24) {
-                    Image(systemName: "building.2.crop.circle.fill").font(.system(size: 66)).foregroundStyle(Color.nibmBlue)
-                    Text("Welcome to\nNIBM ONE").font(.system(size: 36, weight: .bold)).foregroundStyle(Color.nibmNavy)
-                    Text("One place for attendance, leave and service requests.").foregroundStyle(.secondary)
-                    TextField("EPF No.", text: $epfNo).textContentType(.username).keyboardType(.numberPad).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
-                    SecureField("Password", text: $password).textContentType(.password).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
-                    Toggle("Use MySQL backend", isOn: $useServer)
-                    if useServer {
-                        if let issue = AppConfiguration.loadIssue { Text(issue).font(.caption).foregroundStyle(.orange) }
-                        TextField("Backend URL", text: $serverURL).keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled().textFieldStyle(.roundedBorder)
-                        Text("Simulator: http://localhost:8080. On an iPhone, use your server's LAN address. Your role comes from the server.").font(.caption).foregroundStyle(.secondary)
-                    } else {
-                        Picker("Demo role", selection: $role) { ForEach(EmployeeRole.allCases) { Text($0.rawValue).tag($0) } }
-                    }
-                    Button("Fill sample EPF credentials") { epfNo = "900001"; password = "Demo@123"; error = nil }.buttonStyle(.bordered)
-                    Button("Sign in") {
-                        Task {
-                            do { try await model.signIn(epfNo: epfNo, password: password, role: role, useServer: useServer, serverURL: serverURL) }
-                            catch { self.error = error.localizedDescription }
+            GeometryReader { geometry in
+                ScrollView {
+                    VStack(spacing: geometry.size.height < 700 ? 20 : 28) {
+                        brandHeader(compact: geometry.size.height < 700)
+                        signInCard
+                        VStack(spacing: 4) {
+                            if !useServer {
+                                Label("Demo mode", systemImage: "person.crop.circle.badge.questionmark")
+                                    .font(.caption.weight(.medium)).foregroundStyle(.orange)
+                            }
+                            Button { focusedField = nil; showConnectionSettings = true } label: {
+                                Label("Connection settings", systemImage: "gearshape")
+                                    .font(.footnote).frame(minHeight: 44)
+                            }.foregroundStyle(.secondary).disabled(model.isLoading)
                         }
-                    }.buttonStyle(PrimaryButtonStyle()).disabled(model.isLoading)
-                    if model.isLoading { ProgressView("Signing in") }
-                    Text("Sample account only: EPF 900001 / Demo@123. Use your own registered EPF No. for actual employee records.").font(.footnote).foregroundStyle(.secondary).textSelection(.enabled)
-                    NavigationLink("Forgot password?", destination: ResetPasswordView())
-                }.padding(24)
-            }.background(Color.nibmBackground.ignoresSafeArea())
+                    }
+                    .frame(maxWidth: 440)
+                    .frame(maxWidth: .infinity)
+                    .frame(minHeight: max(0, geometry.size.height - 56))
+                    .padding(.horizontal, 24).padding(.vertical, 28)
+                }
+                .scrollDismissesKeyboard(.interactively)
+                .background {
+                    ZStack(alignment: .topTrailing) {
+                        LinearGradient(colors: [Color(red: 0.94, green: 0.97, blue: 1), .white], startPoint: .top, endPoint: .bottom)
+                        Circle().fill(Color.cyan.opacity(0.08)).frame(width: 270, height: 270)
+                            .blur(radius: 42).offset(x: 105, y: -90)
+                    }.ignoresSafeArea()
+                }
+                .toolbar(.hidden, for: .navigationBar)
+            }
+            .sheet(isPresented: $showConnectionSettings) { connectionSettings }
         }.errorAlert($error)
+    }
+
+    private func brandHeader(compact: Bool) -> some View {
+        VStack(spacing: 10) {
+            Image("NIBMOneMark")
+                .resizable().scaledToFit().frame(width: compact ? 76 : 100, height: compact ? 76 : 100)
+                .shadow(color: accent.opacity(0.12), radius: 18, y: 8)
+                .accessibilityHidden(true)
+            Text("NIBM ONE").font(.title.weight(.heavy)).tracking(1.2).foregroundStyle(Color.nibmNavy)
+            Text("Your workday, all in one place.")
+                .font(.subheadline).foregroundStyle(.secondary).multilineTextAlignment(.center)
+        }
+    }
+
+    private var signInCard: some View {
+        VStack(alignment: .leading, spacing: 16) {
+            VStack(alignment: .leading, spacing: 6) {
+                Text("Welcome back").font(.title2.bold()).foregroundStyle(Color.nibmNavy)
+                Text("Sign in with your employee account.").font(.subheadline).foregroundStyle(.secondary)
+            }
+            fieldShell(title: "EPF number", icon: "person.crop.square", field: .epf) {
+                TextField("Enter EPF number", text: $epfNo)
+                    .keyboardType(.numberPad).textContentType(.username)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .focused($focusedField, equals: .epf).accessibilityLabel("EPF number")
+            }
+            VStack(alignment: .trailing, spacing: 4) {
+                fieldShell(title: "Password", icon: "lock", field: .password) {
+                    Group {
+                        if showPassword { TextField("Enter password", text: $password) }
+                        else { SecureField("Enter password", text: $password) }
+                    }
+                    .textContentType(.password).keyboardType(.asciiCapable)
+                    .textInputAutocapitalization(.never).autocorrectionDisabled()
+                    .focused($focusedField, equals: .password)
+                    .submitLabel(.go).onSubmit(signIn).accessibilityLabel("Password")
+                    Button {
+                        showPassword.toggle(); focusedField = .password
+                    } label: {
+                        Image(systemName: showPassword ? "eye.slash" : "eye")
+                            .foregroundStyle(.secondary).frame(width: 44, height: 44)
+                    }
+                    .buttonStyle(.plain)
+                    .accessibilityLabel(showPassword ? "Hide password" : "Show password")
+                }
+                NavigationLink(destination: ResetPasswordView()) {
+                    Text("Forgot password?").font(.footnote.weight(.medium)).frame(minHeight: 44)
+                }.foregroundStyle(accent)
+            }
+            Button(action: signIn) {
+                HStack(spacing: 10) {
+                    if model.isLoading { ProgressView().tint(.white) }
+                    Text(model.isLoading ? "Signing in…" : "Sign in").font(.headline)
+                    if !model.isLoading { Image(systemName: "arrow.right").font(.subheadline.weight(.semibold)) }
+                }
+                .frame(maxWidth: .infinity).frame(minHeight: 54)
+                .foregroundStyle(.white)
+                .background(LinearGradient(colors: [accent, Color(red: 0.02, green: 0.25, blue: 0.78)], startPoint: .leading, endPoint: .trailing))
+                .clipShape(RoundedRectangle(cornerRadius: 15))
+                .opacity(canSignIn ? 1 : 0.55)
+            }.buttonStyle(.plain).disabled(!canSignIn)
+        }
+        .padding(20)
+        .background(.white, in: RoundedRectangle(cornerRadius: 26))
+        .overlay { RoundedRectangle(cornerRadius: 26).strokeBorder(Color(red: 0.89, green: 0.93, blue: 0.98), lineWidth: 1) }
+        .shadow(color: Color.nibmNavy.opacity(0.06), radius: 24, y: 12)
+        .disabled(model.isLoading)
+    }
+
+    private func fieldShell<Content: View>(title: String, icon: String, field: Field, @ViewBuilder content: () -> Content) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(title).font(.footnote.weight(.semibold)).foregroundStyle(Color.nibmNavy)
+            HStack(spacing: 12) {
+                Image(systemName: icon).foregroundStyle(accent).frame(width: 20).accessibilityHidden(true)
+                content()
+            }
+            .font(.body).foregroundStyle(Color.nibmNavy)
+            .padding(.leading, 15).padding(.trailing, field == .password ? 4 : 15)
+            .frame(minHeight: 54)
+            .background(Color(red: 0.97, green: 0.98, blue: 1), in: RoundedRectangle(cornerRadius: 14))
+            .overlay {
+                RoundedRectangle(cornerRadius: 14)
+                    .strokeBorder(focusedField == field ? accent : Color(red: 0.87, green: 0.91, blue: 0.96), lineWidth: focusedField == field ? 1.5 : 1)
+            }
+        }
+    }
+
+    private var connectionSettings: some View {
+        NavigationStack {
+            Form {
+                Section("Data source") {
+                    Toggle("Connect to server", isOn: $useServer)
+                    if useServer {
+                        TextField("Server URL", text: $serverURL)
+                            .keyboardType(.URL).textInputAutocapitalization(.never).autocorrectionDisabled()
+                        if let issue = AppConfiguration.loadIssue { Text(issue).font(.caption).foregroundStyle(.orange) }
+                        Text("Use your server’s LAN address on an iPhone. Use localhost only when the server runs on the simulator’s Mac.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    } else {
+                        Picker("Demo role", selection: $role) {
+                            ForEach(EmployeeRole.allCases.filter { $0 != .administrator }) { Text($0.rawValue).tag($0) }
+                        }
+                        Button("Use demo account") {
+                            epfNo = "900001"; password = "Demo@123"; error = nil; showPassword = false
+                            showConnectionSettings = false
+                        }
+                        Text("Demo data stays on this device. Use the server and your registered EPF for employee records.")
+                            .font(.caption).foregroundStyle(.secondary)
+                    }
+                }
+            }
+            .navigationTitle("Connection settings").navigationBarTitleDisplayMode(.inline)
+            .toolbar { ToolbarItem(placement: .confirmationAction) { Button("Done") { showConnectionSettings = false } } }
+        }.presentationDetents([.medium, .large]).presentationDragIndicator(.visible)
+    }
+
+    private func signIn() {
+        guard canSignIn else { return }
+        focusedField = nil; error = nil
+        Task {
+            do {
+                try await model.signIn(epfNo: epfNo.trimmingCharacters(in: .whitespacesAndNewlines), password: password,
+                                       role: role, useServer: useServer, serverURL: serverURL)
+            } catch { self.error = error.localizedDescription }
+        }
     }
 }
 
@@ -89,7 +228,7 @@ struct ResetPasswordView: View {
                 }
             }
             Text("Password recovery requires the institutional API. No reset email is sent by this demo.").foregroundStyle(.secondary)
-        }.navigationTitle("Reset password").errorAlert($error)
+        }.navigationTitle("Reset password").toolbar(.visible, for: .navigationBar).errorAlert($error)
             .alert("Demo recovery", isPresented: $showResult) {
                 Button("OK", role: .cancel) {}
             } message: { Text("No email was sent. Use 900001 and Demo@123 to access this build, or contact your administrator for an institutional password reset.") }
@@ -117,9 +256,9 @@ struct MainTabView: View {
     var body: some View {
         TabView(selection: $model.selectedTab) {
             HomeView().tabItem { Label("Home", systemImage: "house.fill") }.tag(0)
-            AttendanceView().tabItem { Label("Attendance", systemImage: "calendar") }.tag(1)
-            LeaveView().tabItem { Label("Leave", systemImage: "doc.text.fill") }.tag(2)
-            TicketsView().tabItem { Label("Tickets", systemImage: "wrench.and.screwdriver.fill") }.tag(3)
+            if model.can("attendance.view") { AttendanceView().tabItem { Label("Attendance", systemImage: "calendar") }.tag(1) }
+            if model.can("leave.view") { LeaveView().tabItem { Label("Leave", systemImage: "doc.text.fill") }.tag(2) }
+            if model.can("tickets.view") { TicketsView().tabItem { Label("Tickets", systemImage: "wrench.and.screwdriver.fill") }.tag(3) }
             MoreView().tabItem { Label("More", systemImage: "ellipsis.circle.fill") }.tag(4)
         }.tint(.nibmBlue)
     }
@@ -127,43 +266,178 @@ struct MainTabView: View {
 
 struct HomeView: View {
     @EnvironmentObject private var model: AppModel
+    private let accent = Color(red: 0.02, green: 0.39, blue: 0.94)
+    private var today: AttendanceDay? {
+        model.attendance.first { AttendanceCalendarRules.calendar.isDate($0.date, inSameDayAs: Date()) }
+    }
+    private var unreadCount: Int { model.notices.filter { !$0.isRead }.count }
+    private var pendingLeave: Int { model.leaveRequests.filter { $0.status == .pending }.count }
+    private var openTickets: Int { model.tickets.filter { $0.status != .closed && $0.status != .resolved }.count }
+    private var attendanceDescription: String {
+        guard let today, !today.punches.isEmpty else {
+            return model.isLoading ? "Checking today’s records…" : "No punches recorded for today."
+        }
+        return today.summary.lastOut == nil ? "One punch recorded · OUT pending" : "Recorded span \(today.worked) · includes breaks"
+    }
+
     var body: some View {
         NavigationStack {
             ScrollView {
-                VStack(alignment: .leading, spacing: 18) {
-                    HStack {
-                        VStack(alignment: .leading) { Text("Welcome back,").foregroundStyle(.secondary); Text(model.employeeName).font(.title2.bold()) }
-                        Spacer()
-                        NavigationLink(destination: NotificationsView()) { Label("Notifications", systemImage: "bell.badge").labelStyle(.iconOnly).frame(minWidth: 44, minHeight: 44) }
+                VStack(alignment: .leading, spacing: 22) {
+                    dashboardHeader
+                    attendanceHero
+                    if let error = model.storageError {
+                        Label(error, systemImage: "exclamationmark.circle")
+                            .font(.footnote).foregroundStyle(.red).padding(16).frame(maxWidth: .infinity, alignment: .leading)
+                            .background(Color.red.opacity(0.05), in: RoundedRectangle(cornerRadius: 16))
                     }
-                    Label(model.isRemoteSession ? "Connected to MySQL API" : "Local demo data", systemImage: model.isRemoteSession ? "network" : "info.circle").font(.caption).foregroundStyle(.secondary)
-                    if let error = model.storageError { Text(error).foregroundStyle(.red) }
-                    if let today = model.attendance.first(where: { AttendanceCalendarRules.calendar.isDateInToday($0.date) }) {
-                        VStack(alignment: .leading, spacing: 10) {
-                            Text("Today's attendance").font(.headline)
-                            HStack { Metric(title: "First IN", value: today.firstIn); Metric(title: "Last OUT", value: today.lastOut); Metric(title: "Time span", value: today.worked) }
-                            StatusPill(text: today.status.rawValue, color: today.status.color)
-                            NavigationLink("View punches", destination: DayDetailsView(day: today))
-                        }.cardStyle()
-                    } else { Text("No attendance record for today.").cardStyle() }
-                    HStack(alignment: .top) {
-                        NavigationLink(destination: ApplyLeaveView()) { QuickAction(title: "Apply leave", icon: "doc.badge.plus") }
-                        NavigationLink(destination: CreateTicketView()) { QuickAction(title: "Create ticket", icon: "plus.circle") }
-                        NavigationLink(destination: ScanToTicketView()) { QuickAction(title: "Scan QR", icon: "qrcode.viewfinder") }
+                    HStack(alignment: .top, spacing: 10) {
+                        if model.can("leave.apply") { NavigationLink(destination: ApplyLeaveView().toolbar(.visible, for: .navigationBar)) {
+                            QuickAction(title: "Apply leave", icon: "doc.badge.plus", tint: accent)
+                        } }
+                        if model.can("tickets.create") { NavigationLink(destination: CreateTicketView().toolbar(.visible, for: .navigationBar)) {
+                            QuickAction(title: "Create ticket", icon: "plus.circle", tint: .teal)
+                        }
+                        NavigationLink(destination: ScanToTicketView().toolbar(.visible, for: .navigationBar)) {
+                            QuickAction(title: "Scan QR", icon: "qrcode.viewfinder", tint: .indigo)
+                        } }
                     }
-                    AttendanceCalendar()
-                    HStack {
-                        Metric(title: "Available leave", value: "\(LeaveType.allCases.reduce(0) { $0 + model.balance(for: $1) }.formatted()) days")
-                        Metric(title: "Pending leave", value: "\(model.leaveRequests.filter { $0.status == .pending }.count)")
-                        Metric(title: "Open tickets", value: "\(model.tickets.filter { $0.status != .closed && $0.status != .resolved }.count)")
-                    }.cardStyle()
-                    NavigationLink("Recent notifications", destination: NotificationsView())
-                }.padding()
-            }.background(Color.nibmBackground.ignoresSafeArea()).navigationTitle("NIBM ONE")
-                .refreshable { await model.refreshRemote() }
-                .task { await model.refreshRemote() }
-                .toolbar { NavigationLink(destination: ProfileView()) { Label("Profile", systemImage: "person.crop.circle") } }
+                    .buttonStyle(.plain)
+                    if model.can("attendance.view") { AttendanceCalendar() }
+                    if model.can("leave.view") || model.can("tickets.view") { overview }
+                    NavigationLink(destination: NotificationsView().toolbar(.visible, for: .navigationBar)) {
+                        HStack(spacing: 14) {
+                            Image(systemName: "bell").foregroundStyle(accent).frame(width: 42, height: 42)
+                                .background(accent.opacity(0.07), in: RoundedRectangle(cornerRadius: 13))
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text("Your updates").font(.subheadline.weight(.semibold)).foregroundStyle(Color.nibmNavy)
+                                Text(unreadCount == 0 ? "You’re all caught up" : "\(unreadCount) unread notifications")
+                                    .font(.caption).foregroundStyle(.secondary)
+                            }
+                            Spacer(minLength: 4)
+                            Image(systemName: "chevron.right").font(.caption.weight(.bold)).foregroundStyle(.secondary)
+                        }.padding(16).background(.white, in: RoundedRectangle(cornerRadius: 20))
+                    }.buttonStyle(.plain)
+                }
+                .padding(.horizontal, 20).padding(.top, 12).padding(.bottom, 28)
+                .frame(maxWidth: 720).frame(maxWidth: .infinity)
+            }
+            .background(LinearGradient(colors: [Color(red: 0.94, green: 0.97, blue: 1), Color(red: 0.97, green: 0.98, blue: 1)], startPoint: .top, endPoint: .bottom).ignoresSafeArea())
+            .toolbar(.hidden, for: .navigationBar)
+            .refreshable { await model.refreshRemote() }
+            .task { await model.refreshRemote() }
         }
+    }
+
+    private var dashboardHeader: some View {
+        HStack(spacing: 10) {
+            Image("NIBMOneMark").resizable().scaledToFit().frame(width: 40, height: 40).accessibilityHidden(true)
+            VStack(alignment: .leading, spacing: 2) {
+                Text("NIBM ONE").font(.headline.weight(.heavy)).tracking(0.6).foregroundStyle(Color.nibmNavy)
+                Text(model.isRemoteSession ? "Employee dashboard" : "Demo dashboard").font(.caption).foregroundStyle(.secondary)
+            }
+            Spacer(minLength: 4)
+            NavigationLink(destination: NotificationsView().toolbar(.visible, for: .navigationBar)) {
+                Image(systemName: "bell").font(.body.weight(.medium)).frame(width: 44, height: 44)
+                    .background(.white, in: Circle())
+                    .overlay(alignment: .topTrailing) {
+                        if unreadCount > 0 {
+                            Circle().fill(Color.red).frame(width: 8, height: 8).overlay(Circle().stroke(.white, lineWidth: 2)).padding(8)
+                        }
+                    }
+            }.accessibilityLabel("Notifications, \(unreadCount) unread")
+            NavigationLink(destination: ProfileView().toolbar(.visible, for: .navigationBar)) {
+                Image(systemName: "person.crop.circle.fill").font(.title2).frame(width: 44, height: 44)
+                    .background(.white, in: Circle())
+            }.accessibilityLabel("Employee profile")
+        }.foregroundStyle(accent).buttonStyle(.plain)
+    }
+
+    private var attendanceHero: some View {
+        VStack(alignment: .leading, spacing: 14) {
+            VStack(alignment: .leading, spacing: 5) {
+                HStack {
+                    Text("Welcome back").font(.subheadline).foregroundStyle(.white.opacity(0.75))
+                    Spacer(minLength: 8)
+                    Text(today?.status.rawValue ?? "No record").font(.caption.weight(.semibold))
+                        .padding(.horizontal, 9).padding(.vertical, 5).background(.white.opacity(0.13), in: Capsule())
+                }
+                Text(model.employeeName).font(.title2.bold()).fixedSize(horizontal: false, vertical: true)
+                HStack(spacing: 8) {
+                    Text("EPF \(model.epfNo)")
+                    Circle().fill(.white.opacity(0.45)).frame(width: 3, height: 3)
+                    Text(model.role.rawValue)
+                }.font(.caption).foregroundStyle(.white.opacity(0.75))
+            }
+            if model.can("attendance.view") {
+            Divider().overlay(.white.opacity(0.18))
+            HStack {
+                Text("Today’s attendance").font(.subheadline.weight(.semibold))
+                Spacer(minLength: 4)
+                Text(AttendanceCalendarRules.shortDate(Date())).font(.caption).foregroundStyle(.white.opacity(0.75))
+            }
+            HStack(spacing: 18) {
+                attendanceTime("First IN", value: today?.firstIn ?? "--:--", icon: "arrow.down.left", tint: Color(red: 0.38, green: 0.95, blue: 0.81))
+                Rectangle().fill(.white.opacity(0.2)).frame(width: 1, height: 44)
+                attendanceTime("Last OUT", value: today?.lastOut ?? "--:--", icon: "arrow.up.right", tint: Color(red: 0.61, green: 0.82, blue: 1))
+            }
+            if let today {
+                NavigationLink(destination: DayDetailsView(day: today).toolbar(.visible, for: .navigationBar)) {
+                    HStack(spacing: 8) {
+                        Text(attendanceDescription).font(.caption)
+                        Spacer(minLength: 0)
+                        Image(systemName: "chevron.right").font(.caption.weight(.bold))
+                    }.foregroundStyle(.white.opacity(0.8)).frame(minHeight: 44).contentShape(Rectangle())
+                }.buttonStyle(.plain)
+            } else {
+                Label(attendanceDescription, systemImage: "clock")
+                    .font(.caption).foregroundStyle(.white.opacity(0.75))
+            }
+            }
+        }
+        .foregroundStyle(.white).padding(20)
+        .background(LinearGradient(colors: [Color(red: 0.03, green: 0.18, blue: 0.43), Color(red: 0.02, green: 0.36, blue: 0.78)], startPoint: .topLeading, endPoint: .bottomTrailing))
+        .clipShape(RoundedRectangle(cornerRadius: 24))
+        .shadow(color: accent.opacity(0.15), radius: 18, y: 9)
+    }
+
+    private func attendanceTime(_ title: String, value: String, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 7) {
+            Label(title, systemImage: icon).font(.caption.weight(.medium)).foregroundStyle(tint)
+            Text(value).font(.title.weight(.bold)).monospacedDigit().foregroundStyle(.white.opacity(value == "--:--" ? 0.6 : 1))
+        }.frame(maxWidth: .infinity, alignment: .leading).accessibilityElement(children: .combine)
+    }
+
+    private var overview: some View {
+        VStack(alignment: .leading, spacing: 12) {
+            Text("At a glance").font(.title3.bold()).foregroundStyle(Color.nibmNavy)
+            HStack(spacing: 12) {
+                if model.can("leave.view") { Button { model.selectedTab = 2 } label: {
+                    overviewTile("Pending leave", value: pendingLeave, icon: "doc.text", tint: accent)
+                } }
+                if model.can("tickets.view") { Button { model.selectedTab = 3 } label: {
+                    overviewTile("Open tickets", value: openTickets, icon: "wrench.and.screwdriver", tint: .teal)
+                } }
+            }.buttonStyle(.plain)
+            if model.can("leave.view") { Button { model.selectedTab = 2 } label: {
+                HStack(spacing: 12) {
+                    Image(systemName: "calendar.badge.checkmark").foregroundStyle(accent)
+                    Text("Available leave").font(.subheadline).foregroundStyle(Color.nibmNavy)
+                    Spacer(minLength: 4)
+                    Text("\(LeaveType.allCases.reduce(0) { $0 + model.balance(for: $1) }.formatted()) days")
+                        .font(.subheadline.weight(.semibold)).foregroundStyle(accent)
+                }.padding(18).frame(minHeight: 54).background(.white, in: RoundedRectangle(cornerRadius: 18))
+            }.buttonStyle(.plain) }
+        }
+    }
+
+    private func overviewTile(_ title: String, value: Int, icon: String, tint: Color) -> some View {
+        VStack(alignment: .leading, spacing: 10) {
+            Image(systemName: icon).font(.headline).foregroundStyle(tint)
+            Text(value.formatted()).font(.title.bold()).foregroundStyle(Color.nibmNavy)
+            Text(title).font(.footnote).foregroundStyle(.secondary)
+        }.frame(maxWidth: .infinity, alignment: .leading).padding(18)
+            .background(.white, in: RoundedRectangle(cornerRadius: 20))
     }
 }
 
@@ -213,55 +487,118 @@ struct AttendanceView: View {
 struct AttendanceCalendar: View {
     @EnvironmentObject private var model: AppModel
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @State private var selectedDate: Date?
     private let columns = Array(repeating: GridItem(.flexible(), spacing: 4), count: 7)
     private let weekdays = ["Mon", "Tue", "Wed", "Thu", "Fri", "Sat", "Sun"]
+    private var selectedDay: AttendanceDay? {
+        guard let selectedDate, AttendanceCalendarRules.sameMonth(selectedDate, model.attendanceMonth) else { return nil }
+        return day(for: selectedDate)
+    }
+    private var syncLabel: String {
+        if !model.isRemoteSession { return "Demo" }
+        if model.attendanceError != nil { return model.attendanceUpdatedAt == nil ? "Unavailable" : "Cached" }
+        return model.attendanceUpdatedAt == nil ? "Waiting" : "Synced"
+    }
     var body: some View {
         VStack(spacing: 16) {
-            VStack(alignment: .leading, spacing: 14) {
-                HStack {
-                    Text("Attendance calendar").font(.title3.bold()).foregroundStyle(.white)
-                    Spacer(minLength: 4)
-                    Circle().fill(model.isRemoteSession && model.attendanceError == nil ? Color.green : Color.orange).frame(width: 6, height: 6)
-                    Text(model.isRemoteSession ? model.attendanceError == nil ? "LIVE" : "CACHED" : "DEMO").font(.system(size: 9, weight: .bold)).foregroundStyle(.white)
+            VStack(alignment: .leading, spacing: 16) {
+                HStack(spacing: 10) {
+                    Image(systemName: "calendar").font(.headline).foregroundStyle(Color.nibmBlue)
+                        .frame(width: 36, height: 36).background(Color.blue.opacity(0.07), in: RoundedRectangle(cornerRadius: 11))
+                    Text("Attendance").font(.title3.bold()).foregroundStyle(Color.nibmNavy)
+                    Spacer(minLength: 0)
+                    Text(syncLabel).font(.caption2.weight(.semibold)).foregroundStyle(.secondary)
+                        .padding(.horizontal, 9).padding(.vertical, 6)
+                        .background(Color.nibmBlue.opacity(0.05), in: Capsule())
                 }
-                AttendanceMonthControls(dark: true)
+                AttendanceMonthControls(dark: false)
                 HStack {
-                    Text("IN above • OUT below").font(.caption2).foregroundStyle(.white.opacity(0.65))
+                    Text("First IN above · Last OUT below").font(.caption2).foregroundStyle(.secondary)
                     Spacer()
-                    if model.isAttendanceLoading { ProgressView().tint(.white).scaleEffect(0.7) }
-                    Button { Task { await model.refreshAttendanceMonth() } } label: { Image(systemName: "arrow.clockwise").frame(width: 30, height: 30) }
-                        .foregroundStyle(.white).accessibilityLabel("Refresh attendance").disabled(model.isAttendanceLoading)
+                    Button { Task { await model.refreshAttendanceMonth() } } label: {
+                        Group {
+                            if model.isAttendanceLoading { ProgressView() }
+                            else { Image(systemName: "arrow.clockwise").font(.subheadline.weight(.semibold)) }
+                        }.frame(width: 44, height: 44)
+                    }.foregroundStyle(Color.nibmBlue).accessibilityLabel("Refresh attendance").disabled(model.isAttendanceLoading)
                 }
-                LazyVGrid(columns: columns, spacing: 7) {
-                    ForEach(weekdays, id: \.self) { Text($0).font(.system(size: 10, weight: .semibold)).foregroundStyle(.white.opacity(0.7)).padding(.bottom, 3) }
-                    ForEach(0..<AttendanceCalendarRules.leadingDays(in: model.attendanceMonth), id: \.self) { _ in Color.clear.frame(height: 84) }
+                LazyVGrid(columns: columns, spacing: 6) {
+                    ForEach(weekdays, id: \.self) { value in
+                        Text(value).font(.caption2.weight(.semibold))
+                            .foregroundStyle(value == "Sat" || value == "Sun" ? Color.nibmBlue : Color.secondary).padding(.bottom, 5)
+                    }
+                    ForEach(0..<AttendanceCalendarRules.leadingDays(in: model.attendanceMonth), id: \.self) { _ in Color.clear.frame(height: 80) }
                     ForEach(AttendanceCalendarRules.dates(in: model.attendanceMonth), id: \.self) { date in
-                        let day = model.calendarAttendance.first { AttendanceCalendarRules.calendar.isDate($0.date, inSameDayAs: date) }
-                            ?? AttendanceDay(date: date, status: .noRecord, punches: [])
-                        NavigationLink(destination: DayDetailsView(day: day)) { AttendanceDayCard(day: day) }.buttonStyle(.plain)
+                        let record = day(for: date)
+                        let selected = selectedDate.map { AttendanceCalendarRules.calendar.isDate($0, inSameDayAs: date) } ?? false
+                        Button {
+                            if reduceMotion { selectedDate = date }
+                            else { withAnimation(.easeInOut(duration: 0.18)) { selectedDate = date } }
+                        } label: { AttendanceDayCard(day: record, selected: selected) }
+                            .buttonStyle(.plain).accessibilityAddTraits(selected ? .isSelected : [])
+                            .accessibilityHint("Select to see the day summary and open punch details")
                     }
                 }
-                if let error = model.attendanceError { Text(error).font(.caption).foregroundStyle(Color(red: 1, green: 0.66, blue: 0.60)) }
-                if model.calendarAttendance.isEmpty && !model.isAttendanceLoading {
-                    Text(model.isRemoteSession ? "No punches for EPF \(model.epfNo) in this month. Sign in with the employee EPF recorded by the machine." : "No demo records in this month.")
-                        .font(.caption).foregroundStyle(.white.opacity(0.75))
+                HStack(spacing: 12) {
+                    legend("Complete", color: .green)
+                    legend("OUT pending", color: .orange)
+                    legend("Leave", color: .blue)
+                }.padding(.top, 2)
+                if let selectedDay { selectedDayPreview(selectedDay) }
+                else { Text("Tap a date to explore your punches.").font(.caption).foregroundStyle(.secondary) }
+                if let error = model.attendanceError {
+                    Label(error, systemImage: "exclamationmark.circle").font(.caption).foregroundStyle(.red)
                 }
+                if model.calendarAttendance.isEmpty && !model.isAttendanceLoading {
+                    Text(model.isRemoteSession ? "No attendance records this month." : "No demo records this month.")
+                        .font(.caption).foregroundStyle(.secondary)
+                }
+                Divider().overlay(Color.nibmBlue.opacity(0.04))
                 HStack {
                     Text("EPF \(model.epfNo)")
                     Spacer()
                     Text(model.attendanceUpdatedAt.map { "Updated \(AttendanceCalendarRules.time($0))" } ?? "Waiting for records")
-                }.font(.system(size: 10)).foregroundStyle(.white.opacity(0.6))
+                }.font(.caption2).foregroundStyle(.secondary)
             }.padding(14)
-                .background(LinearGradient(colors: [Color(red: 0.07, green: 0.12, blue: 0.25), Color(red: 0.10, green: 0.18, blue: 0.33)], startPoint: .topLeading, endPoint: .bottomTrailing))
-                .clipShape(RoundedRectangle(cornerRadius: 20))
+                .background(.white, in: RoundedRectangle(cornerRadius: 24))
+                .overlay { RoundedRectangle(cornerRadius: 24).strokeBorder(Color.nibmBlue.opacity(0.07), lineWidth: 1) }
+                .shadow(color: Color.nibmNavy.opacity(0.035), radius: 16, y: 6)
             AttendanceMonthlySummary(days: model.calendarAttendance, month: model.attendanceMonth).cardStyle()
-        }.task(id: AttendanceCalendarRules.monthKey(model.attendanceMonth) + (scenePhase == .active ? "-active" : "-inactive")) {
+        }
+        .onChange(of: model.attendanceMonth) { _, _ in selectedDate = nil }
+        .task(id: AttendanceCalendarRules.monthKey(model.attendanceMonth) + (scenePhase == .active ? "-active" : "-inactive")) {
             guard scenePhase == .active else { return }
             while !Task.isCancelled {
                 if !model.isLocked { await model.refreshAttendanceMonth() }
                 do { try await Task.sleep(for: .seconds(30)) } catch { break }
             }
         }
+    }
+
+    private func day(for date: Date) -> AttendanceDay {
+        model.calendarAttendance.first { AttendanceCalendarRules.calendar.isDate($0.date, inSameDayAs: date) }
+            ?? AttendanceDay(date: date, status: .noRecord, punches: [])
+    }
+    private func legend(_ title: String, color: Color) -> some View {
+        HStack(spacing: 4) { Circle().fill(color).frame(width: 5, height: 5); Text(title).font(.caption2) }.foregroundStyle(.secondary)
+    }
+    private func selectedDayPreview(_ day: AttendanceDay) -> some View {
+        NavigationLink(destination: DayDetailsView(day: day)) {
+            HStack(spacing: 10) {
+                VStack(alignment: .leading, spacing: 7) {
+                    HStack(spacing: 6) {
+                        Text(AttendanceCalendarRules.shortDate(day.date)).font(.subheadline.weight(.semibold)).foregroundStyle(Color.nibmNavy)
+                        Circle().fill(day.status.color).frame(width: 5, height: 5)
+                        Text(day.status.rawValue).font(.caption).foregroundStyle(.secondary)
+                    }
+                    Text("IN  \(day.firstIn)     OUT  \(day.lastOut)").font(.subheadline.weight(.medium)).monospacedDigit().foregroundStyle(Color.nibmBlue)
+                }
+                Spacer(minLength: 0)
+                Image(systemName: "arrow.up.right").font(.subheadline.weight(.semibold)).foregroundStyle(Color.nibmBlue)
+            }.padding(14).frame(maxWidth: .infinity, alignment: .leading)
+                .background(Color.nibmBlue.opacity(0.045), in: RoundedRectangle(cornerRadius: 16))
+        }.buttonStyle(.plain).accessibilityHint("Open full punch history")
     }
 }
 
@@ -271,17 +608,17 @@ struct AttendanceMonthControls: View {
     var body: some View {
         HStack(spacing: 7) {
             VStack(alignment: .leading, spacing: 3) {
-                Text(AttendanceCalendarRules.monthTitle(model.attendanceMonth)).font(.headline)
+                Text(AttendanceCalendarRules.monthTitle(model.attendanceMonth)).font(.title3.bold())
                 if !AttendanceCalendarRules.sameMonth(model.attendanceMonth, Date()) {
                     Button("This month") { model.showCurrentAttendanceMonth() }.font(.caption)
                 }
             }
             Spacer(minLength: 0)
-            Button { model.moveAttendanceMonth(by: -1) } label: { Image(systemName: "chevron.left").font(.headline).frame(width: 42, height: 42).background(Color.blue.opacity(0.18)).clipShape(RoundedRectangle(cornerRadius: 11)) }
+            Button { model.moveAttendanceMonth(by: -1) } label: { Image(systemName: "chevron.left").font(.subheadline.weight(.bold)).frame(width: 44, height: 44).background(Color.blue.opacity(dark ? 0.18 : 0.06)).clipShape(RoundedRectangle(cornerRadius: 14)) }
                 .accessibilityLabel("Previous month")
-            Button { model.moveAttendanceMonth(by: 1) } label: { Image(systemName: "chevron.right").font(.headline).frame(width: 42, height: 42).background(Color.blue.opacity(0.18)).clipShape(RoundedRectangle(cornerRadius: 11)) }
+            Button { model.moveAttendanceMonth(by: 1) } label: { Image(systemName: "chevron.right").font(.subheadline.weight(.bold)).frame(width: 44, height: 44).background(Color.blue.opacity(dark ? 0.18 : 0.06)).clipShape(RoundedRectangle(cornerRadius: 14)) }
                 .accessibilityLabel("Next month")
-        }.buttonStyle(.plain).foregroundStyle(dark ? Color.white : Color.primary)
+        }.buttonStyle(.plain).foregroundStyle(dark ? Color.white : Color.nibmBlue)
     }
 }
 
@@ -295,17 +632,32 @@ struct AttendanceMonthlySummary: View {
     var body: some View {
         VStack(alignment: .leading, spacing: 12) {
             Text("Monthly summary").font(.headline)
-            summaryRow("Present", value: present, color: .green)
-            summaryRow("OUT pending / one punch", value: partial, color: .orange)
-            summaryRow("Approved leave", value: leave, color: .blue)
-            summaryRow("No record", value: missing, color: .gray)
+            LazyVGrid(columns: [GridItem(.flexible()), GridItem(.flexible())], spacing: 10) {
+                summaryTile("Complete days", value: present, color: .green, icon: "checkmark.circle")
+                summaryTile("OUT pending", value: partial, color: .orange, icon: "clock")
+                summaryTile("Approved leave", value: leave, color: .blue, icon: "calendar")
+                summaryTile("No record", value: missing, color: .gray, icon: "minus.circle")
+            }
+            Divider()
             let minutes = days.reduce(0) { $0 + $1.summary.workedMinutes }
-            LabeledContent("Recorded time span", value: "\(minutes / 60)h \(minutes % 60)m").font(.subheadline)
+            HStack {
+                Label("Recorded span", systemImage: "clock").foregroundStyle(.secondary)
+                Spacer()
+                Text("\(minutes / 60)h \(minutes % 60)m").fontWeight(.bold).monospacedDigit().foregroundStyle(Color.nibmNavy)
+            }.font(.subheadline)
             Text("First punch is IN; last distinct punch is OUT. Time span includes breaks. No record does not mean absent.").font(.caption).foregroundStyle(.secondary)
         }
     }
-    private func summaryRow(_ label: String, value: Int, color: Color) -> some View {
-        HStack { Circle().fill(color).frame(width: 8, height: 8); Text(label); Spacer(); Text("\(value)").fontWeight(.semibold).monospacedDigit() }.font(.subheadline)
+    private func summaryTile(_ title: String, value: Int, color: Color, icon: String) -> some View {
+        VStack(alignment: .leading, spacing: 9) {
+            HStack {
+                Image(systemName: icon).foregroundStyle(color)
+                Spacer(minLength: 0)
+                Text(value.formatted()).font(.title2.bold()).monospacedDigit().foregroundStyle(Color.nibmNavy)
+            }
+            Text(title).font(.caption).foregroundStyle(.secondary)
+        }.padding(12).frame(maxWidth: .infinity, alignment: .leading)
+            .background(color.opacity(0.055), in: RoundedRectangle(cornerRadius: 14))
     }
 }
 
@@ -343,7 +695,7 @@ struct DayDetailsView: View {
                 if day.punches.isEmpty { Text("No punches recorded for this day.").foregroundStyle(.secondary) }
                 ForEach(day.punches) { punch in Text("\(punch.time) - \(punch.direction.rawValue) - \(punch.machine) - \(punch.branch)") }
             }
-        }.navigationTitle(AttendanceCalendarRules.dayTitle(day.date))
+        }.navigationTitle(AttendanceCalendarRules.dayTitle(day.date)).toolbar(.visible, for: .navigationBar)
     }
 }
 
@@ -353,20 +705,31 @@ struct LeaveView: View {
     var body: some View {
         NavigationStack {
             List {
+                if model.can("leave.apply") {
+                    Section {
+                        NavigationLink(destination: ApplyLeaveView()) {
+                            Label("Apply for leave", systemImage: "plus.circle.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 48)
+                        }.buttonStyle(.borderedProminent).listRowBackground(Color.clear).listRowInsets(EdgeInsets(top: 0, leading: 0, bottom: 0, trailing: 0))
+                    }
+                }
                 Section("Available balance (pending days reserved)") {
                     ForEach(LeaveType.allCases) { type in LabeledContent(type.rawValue, value: "\(model.balance(for: type).formatted()) days") }
-                    NavigationLink("Apply for leave", destination: ApplyLeaveView())
                 }
                 Section("Request history") {
                     Picker("Status", selection: $filter) { Text("All").tag("All"); ForEach(RequestStatus.allCases, id: \.self) { Text($0.rawValue).tag($0.rawValue) } }
-                    if model.leaveRequests.filter({ filter == "All" || $0.status.rawValue == filter }).isEmpty { Text("No matching requests.").foregroundStyle(.secondary) }
+                    if model.leaveRequests.filter({ filter == "All" || $0.status.rawValue == filter }).isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("No leave requests", systemImage: "doc.text.magnifyingglass").font(.headline)
+                            Text(model.can("leave.apply") ? "Use Apply for leave above to create a request, or choose a different status." : "No requests match the selected status.").font(.caption).foregroundStyle(.secondary)
+                        }.padding(.vertical, 10)
+                    }
                     ForEach(model.leaveRequests.filter { filter == "All" || $0.status.rawValue == filter }) { request in
                         NavigationLink(destination: LeaveDetailView(requestID: request.id)) {
                             HStack { VStack(alignment: .leading) { Text(request.type.rawValue).font(.headline); Text(request.dates).font(.caption) }; Spacer(); StatusPill(text: request.status.rawValue, color: request.status.color) }
                         }
                     }
                 }
-            }.navigationTitle("Leave").refreshable { await model.refreshRemote() }.task { await model.refreshRemote() }
+            }.navigationTitle("Leave").navigationBarTitleDisplayMode(.inline).tint(.nibmBlue).refreshable { await model.refreshRemote() }.task { await model.refreshRemote() }
         }
     }
 }
@@ -411,9 +774,9 @@ struct ApplyLeaveView: View {
                         showConfirmation = true
                     } catch { self.error = error.localizedDescription }
                 }
-            }.disabled(submitted != nil || isSubmitting)
+            }.buttonStyle(.borderedProminent).frame(minHeight: 48).disabled(submitted != nil || isSubmitting)
             if isSubmitting { ProgressView("Saving request") }
-        }.navigationTitle("Apply for leave").errorAlert($error)
+        }.navigationTitle("Apply for leave").navigationBarTitleDisplayMode(.inline).tint(.nibmBlue).errorAlert($error)
             .onChange(of: start) { _, date in if halfDay || end < date { end = date } }
             .onChange(of: halfDay) { _, enabled in if enabled { end = start } }
             .alert("Request submitted", isPresented: $showConfirmation) {
@@ -446,7 +809,7 @@ struct LeaveDetailView: View {
                 Section("Reason") { Text(request.reason) }
                 if let reason = request.rejectionReason { Section("Rejection reason") { Text(reason) } }
                 if let attachment = request.attachment { Section("Supporting document") { AttachmentPreview(attachment: attachment) } }
-                if model.role == .approver && request.status == .pending {
+                if model.can("leave.approve") && request.status == .pending {
                     Section(model.isRemoteSession ? "Manager decision" : "Demo manager decision") {
                         TextField("Reason required for rejection", text: $rejectionReason, axis: .vertical)
                         Button("Approve") { decide(approve: true) }
@@ -492,12 +855,20 @@ struct TicketsView: View {
         NavigationStack {
             List {
                 Section {
-                    NavigationLink(destination: CreateTicketView()) { Label("Create ticket", systemImage: "plus.circle.fill") }
-                    NavigationLink(destination: ScanToTicketView()) { Label("Scan room / asset QR", systemImage: "qrcode.viewfinder") }
+                    if model.can("tickets.create") {
+                        NavigationLink(destination: CreateTicketView()) { Label("Create ticket", systemImage: "plus.circle.fill").font(.headline).frame(maxWidth: .infinity, minHeight: 48) }.buttonStyle(.borderedProminent)
+                        NavigationLink(destination: ScanToTicketView()) { Label("Scan room / asset QR", systemImage: "qrcode.viewfinder").frame(minHeight: 44) }.foregroundStyle(Color.nibmBlue)
+                    }
+                    if model.can("map.view") { NavigationLink(destination: TicketMapView()) { Label("Branches and ticket map", systemImage: "map").frame(minHeight: 44) }.foregroundStyle(Color.nibmBlue) }
                     Picker("Status", selection: $filter) { Text("All").tag("All"); ForEach(TicketStatus.allCases) { Text($0.rawValue).tag($0.rawValue) } }
                 }
                 Section("My tickets") {
-                    if filtered.isEmpty { Text("No matching tickets.").foregroundStyle(.secondary) }
+                    if filtered.isEmpty {
+                        VStack(alignment: .leading, spacing: 8) {
+                            Label("No service requests", systemImage: "tray").font(.headline)
+                            Text(model.can("tickets.create") ? "Create a ticket using the blue button above, or change your filters." : "No requests match the selected filters.").font(.caption).foregroundStyle(.secondary)
+                        }.padding(.vertical, 12)
+                    }
                     ForEach(filtered) { ticket in
                         NavigationLink(destination: TicketDetailView(ticketID: ticket.id)) {
                             VStack(alignment: .leading, spacing: 5) {
@@ -508,9 +879,8 @@ struct TicketsView: View {
                         }
                     }
                 }
-            }.searchable(text: $search, prompt: "Number, title, room or asset").navigationTitle("Service requests")
+            }.searchable(text: $search, prompt: "Number, title, room or asset").navigationTitle("Service requests").navigationBarTitleDisplayMode(.inline).tint(.nibmBlue)
                 .refreshable { await model.refreshRemote() }.task { await model.refreshRemote() }
-                .toolbar { NavigationLink(destination: TicketMapView()) { Label("Ticket map", systemImage: "map") } }
         }
     }
 }
@@ -579,9 +949,9 @@ struct CreateTicketView: View {
                         showConfirmation = true
                     } catch { self.error = error.localizedDescription }
                 }
-            }.disabled(isLoadingPhoto || isSubmitting || submitted != nil)
+            }.buttonStyle(.borderedProminent).frame(minHeight: 48).disabled(isLoadingPhoto || isSubmitting || submitted != nil)
             if isSubmitting { ProgressView("Saving ticket") }
-        }.navigationTitle("Create ticket").errorAlert($error)
+        }.navigationTitle("Create ticket").navigationBarTitleDisplayMode(.inline).tint(.nibmBlue).errorAlert($error)
             .onChange(of: assetID) { _, code in if let asset = Asset.identify(code) { room = asset.room } }
             .task(id: photoItem) {
                 guard let photoItem else { return }
@@ -633,7 +1003,7 @@ struct TicketDetailView: View {
                 }
                 Section("Timeline") {
                     ForEach(ticket.events) { event in VStack(alignment: .leading) { Label(event.status.rawValue, systemImage: "checkmark.circle.fill"); Text(event.date.formatted(date: .abbreviated, time: .shortened)).font(.caption).foregroundStyle(.secondary) } }
-                    if model.role == .support && ticket.status != .closed {
+                    if model.can("tickets.manage") && ticket.status != .closed {
                         Button("Advance to next status") {
                             guard !isSubmitting else { return }; isSubmitting = true
                             Task {
@@ -663,22 +1033,7 @@ struct TicketDetailView: View {
 }
 
 struct TicketMapView: View {
-    @EnvironmentObject private var model: AppModel
-    @State private var selected: UUID?
-    var body: some View {
-        VStack(spacing: 0) {
-            Map(selection: $selected) {
-                ForEach(model.tickets.filter { $0.status != .closed }) { ticket in
-                    if let coordinate = ticket.coordinate { Marker(ticket.title, coordinate: coordinate.clLocation).tag(ticket.id) }
-                }
-            }
-            if let ticket = model.tickets.first(where: { $0.id == selected }) {
-                NavigationLink(destination: TicketDetailView(ticketID: ticket.id)) {
-                    VStack(alignment: .leading) { Text(ticket.title).font(.headline); Text("\(ticket.room) - \(ticket.priority) - \(ticket.status.rawValue)"); Text("Open ticket details").font(.caption) }.frame(maxWidth: .infinity, alignment: .leading).padding()
-                }
-            } else { Text("Select a pin to preview a ticket. Only tickets with an attached location appear.").font(.caption).padding() }
-        }.navigationTitle("Ticket map")
-    }
+    var body: some View { BranchTicketMapView() }
 }
 
 struct MoreView: View {
@@ -690,13 +1045,21 @@ struct MoreView: View {
                 NavigationLink(destination: NotificationsView()) { Label("Notifications", systemImage: "bell") }
                 NavigationLink(destination: ProfileView()) { Label("Employee profile", systemImage: "person") }
                 NavigationLink(destination: SettingsView()) { Label("Settings", systemImage: "gearshape") }
-                if model.role == .approver { NavigationLink(destination: LeaveApprovalsView()) { Label("Leave approvals", systemImage: "checkmark.seal") } }
-                if model.isRemoteSession && (model.role == .approver || model.role == .support) {
+                if model.can("map.view") { NavigationLink(destination: TicketMapView()) { Label("Branches and my location", systemImage: "map") } }
+                if model.can("leave.approve") { NavigationLink(destination: LeaveApprovalsView()) { Label("Leave approvals", systemImage: "checkmark.seal") } }
+                if model.isRemoteSession && model.can("machines.manage") {
                     NavigationLink(destination: FingerprintMachineView()) { Label("Fingerprint machine", systemImage: "touchid") }
                 }
-                Section { Button("Sign out", role: .destructive) { confirmSignOut = true } }
-                Text(model.isRemoteSession ? "MySQL backend - \(model.role.rawValue)" : "Local demo - \(model.role.rawValue). Sign out to choose another demo role.").font(.caption).foregroundStyle(.secondary)
-            }.navigationTitle("More")
+                if model.isRemoteSession && model.role == .administrator {
+                    Section("Administration") {
+                        NavigationLink(destination: EmployeeAccountsView()) { Label("Employee accounts", systemImage: "person.badge.plus") }
+                        NavigationLink(destination: RolePermissionsView()) { Label("Roles and permissions", systemImage: "lock.shield") }
+                        NavigationLink(destination: BranchLocationsView()) { Label("Manage branch pins", systemImage: "mappin.and.ellipse") }
+                    }
+                }
+                Section { Button(role: .destructive) { confirmSignOut = true } label: { Label("Sign out", systemImage: "rectangle.portrait.and.arrow.right").frame(minHeight: 44) } }
+                Text("\(model.role.rawValue) · \(model.isRemoteSession ? "Employee account" : "Local demo")").font(.caption).foregroundStyle(.secondary)
+            }.navigationTitle("More").navigationBarTitleDisplayMode(.inline).tint(.nibmBlue).task { await model.refreshRemote() }
                 .confirmationDialog("Sign out of NIBM ONE?", isPresented: $confirmSignOut, titleVisibility: .visible) { Button("Sign out", role: .destructive) { model.signOut() } }
         }
     }
@@ -732,7 +1095,22 @@ struct NoticeDetailView: View {
 struct ProfileView: View {
     @EnvironmentObject private var model: AppModel
     var body: some View {
-        Form { Section { LabeledContent("Name", value: model.employeeName); LabeledContent("EPF No.", value: model.epfNo); LabeledContent("Branch", value: model.branch); LabeledContent("Role", value: model.role.rawValue) } }.navigationTitle("Employee profile")
+        Form {
+            Section {
+                VStack(alignment: .leading, spacing: 10) {
+                    Image("NIBMOneMark").resizable().scaledToFit().frame(width: 54, height: 54)
+                    Text(model.employeeName).font(.title3.bold()).fixedSize(horizontal: false, vertical: true)
+                    Text("EPF \(model.epfNo)").font(.subheadline).foregroundStyle(.secondary)
+                }.padding(.vertical, 12)
+            }
+            Section("Employment") {
+                LabeledContent("Branch", value: model.branch.isEmpty ? "Not assigned" : model.branch)
+                LabeledContent("Role", value: model.role.rawValue)
+            }
+            if model.isRemoteSession && model.role == .administrator {
+                Section("Administration") { NavigationLink("Manage employee accounts", destination: EmployeeAccountsView()); NavigationLink("Roles and permissions", destination: RolePermissionsView()) }
+            }
+        }.navigationTitle("Employee profile").navigationBarTitleDisplayMode(.inline).tint(.nibmBlue)
     }
 }
 
@@ -745,14 +1123,14 @@ struct SettingsView: View {
                 Toggle("Face ID / device passcode app lock", isOn: Binding(get: { model.appLockEnabled }, set: { enabled in
                     Task { do { try await model.configureAppLock(enabled: enabled) } catch { self.error = error.localizedDescription } }
                 })).disabled(model.isAuthenticating)
-                Text("When enabled, returning after the app enters the background requires device authentication. Sign out disables app lock for this demo session.").font(.caption).foregroundStyle(.secondary)
+                Text("Require Face ID, Touch ID or device passcode when returning to the app. Signing out turns off app lock for this session.").font(.caption).foregroundStyle(.secondary)
             }
             Section("Preferences") {
-                NavigationLink("Notifications", destination: NotificationSettingsView())
-                NavigationLink("Accessibility", destination: AccessibilitySettingsView())
-                NavigationLink("Home Screen widget", destination: IntegrationStatusView())
+                NavigationLink(destination: NotificationSettingsView()) { Label("Notifications", systemImage: "bell.badge") }
+                NavigationLink(destination: AccessibilitySettingsView()) { Label("Accessibility", systemImage: "accessibility") }
+                NavigationLink(destination: IntegrationStatusView()) { Label("Home Screen widget", systemImage: "square.grid.2x2") }
             }
-        }.navigationTitle("Settings").errorAlert($error)
+        }.navigationTitle("Settings").navigationBarTitleDisplayMode(.inline).tint(.nibmBlue).errorAlert($error)
     }
 }
 
@@ -832,33 +1210,48 @@ struct AttendanceRow: View {
 }
 struct AttendanceDayCard: View {
     let day: AttendanceDay
+    var selected = false
     private var today: Bool { AttendanceCalendarRules.calendar.isDateInToday(day.date) }
-    private var tint: Color { day.status == .noRecord ? Color.white.opacity(0.25) : day.status.color }
+    private var tint: Color { day.status == .noRecord ? Color.gray.opacity(0.4) : day.status.color }
     var body: some View {
-        VStack(spacing: 4) {
-            HStack(spacing: 1) {
-                Text("\(AttendanceCalendarRules.calendar.component(.day, from: day.date))")
-                    .font(.system(size: 12, weight: .bold)).frame(width: 22, height: 22)
-                    .background(today ? Color.blue : Color.clear).clipShape(Circle())
-                Spacer(minLength: 0)
-                Circle().fill(tint).frame(width: 5, height: 5)
-            }
+        VStack(spacing: 5) {
+            Text("\(AttendanceCalendarRules.calendar.component(.day, from: day.date))")
+                .font(.caption.weight(.semibold)).frame(width: 26, height: 26)
+                .foregroundStyle(today ? Color.white : Color.nibmNavy)
+                .background(today ? Color.nibmBlue : Color.clear, in: Circle())
             Spacer(minLength: 2)
-            VStack(spacing: 2) {
-                Text(day.firstIn).fontWeight(.bold)
-                Text(day.lastOut).foregroundStyle(.white.opacity(day.summary.lastOut == nil ? 0.38 : 0.9))
-            }.font(.system(size: 10.5, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.7)
-            Text(day.status == .noRecord ? "No record" : day.punches.isEmpty ? day.status.rawValue : "\(day.punches.count) punches")
-                .font(.system(size: 7)).lineLimit(1).minimumScaleFactor(0.7).foregroundStyle(.white.opacity(0.6))
-        }.foregroundStyle(.white).padding(5).frame(maxWidth: .infinity, minHeight: 90)
-            .background(tint.opacity(day.status == .noRecord ? 0.05 : 0.11))
-            .clipShape(RoundedRectangle(cornerRadius: 10))
-            .overlay(RoundedRectangle(cornerRadius: 10).stroke(today ? Color.blue : tint.opacity(0.65), lineWidth: today ? 1.7 : 1))
+            if !day.punches.isEmpty {
+                VStack(spacing: 3) {
+                    Text(day.firstIn).fontWeight(.bold).foregroundStyle(Color.nibmNavy)
+                    Text(day.lastOut).foregroundStyle(day.summary.lastOut == nil ? Color.secondary : Color.nibmBlue)
+                }.font(.system(size: 11, design: .rounded)).monospacedDigit().lineLimit(1).minimumScaleFactor(0.85)
+            } else {
+                Text("—").font(.subheadline).foregroundStyle(Color.secondary.opacity(0.5)).frame(minHeight: 28)
+            }
+            Circle().fill(day.status == .noRecord ? Color.clear : tint).frame(width: 4, height: 4)
+        }.padding(.horizontal, 2).padding(.vertical, 7).frame(maxWidth: .infinity, minHeight: 86)
+            .background(selected ? Color.nibmBlue.opacity(0.08) : day.status == .noRecord ? Color(red: 0.97, green: 0.98, blue: 0.99) : tint.opacity(0.055))
+            .clipShape(RoundedRectangle(cornerRadius: 12))
+            .overlay(RoundedRectangle(cornerRadius: 12).strokeBorder(selected ? Color.nibmBlue : today ? Color.nibmBlue.opacity(0.3) : Color.nibmBlue.opacity(0.045), lineWidth: selected ? 1.7 : 1))
             .accessibilityElement(children: .ignore).accessibilityLabel("\(AttendanceCalendarRules.dayTitle(day.date)), \(day.status.rawValue), IN \(day.firstIn), OUT \(day.lastOut), \(day.punches.count) punches")
     }
 }
 struct Metric: View { let title: String; let value: String; var body: some View { VStack(alignment: .leading) { Text(title).font(.caption).foregroundStyle(.secondary); Text(value).font(.headline) }.frame(maxWidth: .infinity, alignment: .leading) } }
-struct QuickAction: View { let title: String; let icon: String; var body: some View { VStack(spacing: 8) { Image(systemName: icon).font(.title2); Text(title).font(.caption).multilineTextAlignment(.center) }.frame(maxWidth: .infinity, minHeight: 64).padding(.vertical, 12).background(.white).clipShape(RoundedRectangle(cornerRadius: 14)) } }
+struct QuickAction: View {
+    let title: String
+    let icon: String
+    var tint: Color = .nibmBlue
+    var body: some View {
+        VStack(spacing: 10) {
+            Image(systemName: icon).font(.title2).foregroundStyle(tint).frame(width: 44, height: 44)
+                .background(tint.opacity(0.08), in: RoundedRectangle(cornerRadius: 13)).accessibilityHidden(true)
+            Text(title).font(.footnote.weight(.semibold)).foregroundStyle(Color.nibmNavy).multilineTextAlignment(.center)
+        }
+        .padding(.horizontal, 6).frame(maxWidth: .infinity, minHeight: 104)
+        .background(.white, in: RoundedRectangle(cornerRadius: 20))
+        .overlay { RoundedRectangle(cornerRadius: 20).strokeBorder(Color.nibmBlue.opacity(0.06), lineWidth: 1) }
+    }
+}
 struct StatusPill: View { let text: String; let color: Color; var body: some View { Text(text).font(.caption.bold()).padding(.horizontal, 9).padding(.vertical, 5).background(color.opacity(0.14)).foregroundStyle(color).clipShape(Capsule()) } }
 struct PrimaryButtonStyle: ButtonStyle { func makeBody(configuration: Configuration) -> some View { configuration.label.frame(maxWidth: .infinity).padding().background(Color.nibmBlue).foregroundStyle(.white).clipShape(RoundedRectangle(cornerRadius: 12)).opacity(configuration.isPressed ? 0.8 : 1) } }
 struct ErrorAlert: ViewModifier {

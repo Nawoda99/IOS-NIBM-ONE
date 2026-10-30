@@ -10,6 +10,8 @@ final class AppModel: ObservableObject {
     @Published private(set) var isAuthenticating = false
     @Published private(set) var appLockEnabled = false
     @Published private(set) var role: EmployeeRole = .employee
+    @Published private(set) var permissions: Set<String> = []
+    func can(_ permission: String) -> Bool { isRemoteSession ? permissions.contains(permission) : role.defaultPermissions.contains(permission) }
     @Published var selectedTab = 0
     @Published private(set) var leaveRequests: [LeaveRequest] = [] { didSet { updateWidget() } }
     @Published private(set) var tickets: [Ticket] = [] { didSet { updateWidget() } }
@@ -124,7 +126,7 @@ final class AppModel: ObservableObject {
         api = nil
         if let oldAPI { Task { _ = try? await oldAPI.send("api/logout"); oldAPI.token = nil } }
         sessionID = UUID(); isAuthenticated = false; isLocked = false
-        appLockEnabled = false; selectedTab = 0; role = .employee
+        appLockEnabled = false; selectedTab = 0; role = .employee; permissions = []
         isRemoteSession = false; leaveRequests = []; tickets = []; notices = []; attendance = []
         remoteApprovals = []; machineSync = []; storageError = nil
         attendanceRequestID = UUID(); calendarAttendance = []; attendanceError = nil
@@ -142,7 +144,9 @@ final class AppModel: ObservableObject {
 
     private func navigateFromWidget() {
         guard let tab = pendingWidgetTab else { return }
-        selectedTab = tab; pendingWidgetTab = nil
+        let required = [1: "attendance.view", 2: "leave.view", 3: "tickets.view"]
+        selectedTab = required[tab].map { can($0) } == true ? tab : 0
+        pendingWidgetTab = nil
     }
 
     private func updateWidget() {
@@ -213,7 +217,7 @@ final class AppModel: ObservableObject {
             if let index = remoteApprovals.firstIndex(where: { $0.id == id }) { remoteApprovals[index] = request }
             return
         }
-        guard role == .approver else { throw FormError.invalid("Switch to the approver demo role to record decisions.") }
+        guard can("leave.approve") else { throw FormError.invalid("Leave approval access is required.") }
         guard let index = leaveRequests.firstIndex(where: { $0.id == id }), leaveRequests[index].status == .pending else {
             throw FormError.invalid("This request is no longer pending.")
         }
@@ -268,7 +272,7 @@ final class AppModel: ObservableObject {
             if let index = tickets.firstIndex(where: { $0.id == id }) { tickets[index] = ticket }
             return
         }
-        guard role == .support else { throw FormError.invalid("Support access is required.") }
+        guard can("tickets.manage") else { throw FormError.invalid("Support access is required.") }
         guard let index = tickets.firstIndex(where: { $0.id == id }),
               let current = TicketStatus.allCases.firstIndex(of: tickets[index].status),
               current + 1 < TicketStatus.allCases.count else { throw FormError.invalid("This ticket has no further status changes.") }
@@ -348,6 +352,31 @@ final class AppModel: ObservableObject {
     }
 
     func fingerprintMachines() async throws -> [MachineAdminStatus] { try await remote("api/machines") }
+    func employeeAccounts(search: String = "") async throws -> [EmployeeAccount] {
+        try await remote("api/admin/employees", queryItems: [URLQueryItem(name: "search", value: search)])
+    }
+    func createEmployeeAccount(_ body: CreateEmployeeBody) async throws -> CreatedEmployee {
+        try await remote("api/admin/employees", method: "POST", body: APIClient.encode(body))
+    }
+    func updateEmployeeAccount(id: UUID, role: EmployeeRole, branchID: Int?) async throws {
+        guard let api, isAuthenticated else { throw APIError.sessionChanged }
+        let session = sessionID
+        _ = try await api.send("api/admin/employees/\(id.uuidString)", method: "PATCH", body: APIClient.encode(UpdateEmployeeBody(role: role, branchID: branchID)))
+        guard session == sessionID, isAuthenticated else { throw APIError.sessionChanged }
+        await refreshRemote()
+    }
+    func permissionDirectory() async throws -> PermissionDirectory { try await remote("api/admin/permissions") }
+    func saveRolePermissions(role: EmployeeRole, permissions: Set<String>) async throws {
+        let _: RolePermission = try await remote("api/admin/permissions/\(role.rawValue)", method: "PUT", body: APIClient.encode(PermissionBody(permissions: permissions.sorted())))
+        await refreshRemote()
+    }
+    func branchDirectory() async throws -> BranchDirectory { try await remote("api/branches") }
+    func saveBranchLocation(id: Int, address: String, coordinate: Coordinate) async throws {
+        guard let api, isAuthenticated else { throw APIError.sessionChanged }
+        let session = sessionID
+        _ = try await api.send("api/admin/branches/\(id)/location", method: "PUT", body: APIClient.encode(BranchLocationBody(address: address, coordinate: coordinate)))
+        guard session == sessionID, isAuthenticated else { throw APIError.sessionChanged }
+    }
     func unmappedMachineUsers() async throws -> [UnmappedMachineUser] { try await remote("api/machines/unmapped") }
     func pullFingerprintPunches() async throws -> FingerprintResult {
         let result: FingerprintResult = try await remote("api/machines/sync", method: "POST")
@@ -382,6 +411,8 @@ final class AppModel: ObservableObject {
 
     private func apply(_ snapshot: RemoteSnapshot) {
         employeeName = snapshot.profile.name; epfNo = snapshot.profile.epfNo; branch = snapshot.profile.branch; role = snapshot.profile.role
+        permissions = Set(snapshot.profile.permissions ?? Array(role.defaultPermissions))
+        if (selectedTab == 1 && !can("attendance.view")) || (selectedTab == 2 && !can("leave.view")) || (selectedTab == 3 && !can("tickets.view")) { selectedTab = 0 }
         leaveRequests = snapshot.state.leaveRequests; tickets = snapshot.state.tickets; notices = snapshot.state.notices
         remoteApprovals = snapshot.approvals; machineSync = snapshot.sync
         attendance = AttendanceCalendarRules.days(punches: snapshot.punches, leaves: leaveRequests, month: Date())

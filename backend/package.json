@@ -15,7 +15,8 @@
     "device:read": "node scripts/read-device.js",
     "postinstall": "patch-package",
     "test:mysql": "node scripts/run-mysql-check.js",
-    "employee:create": "node scripts/create-employee.js"
+    "employee:create": "node scripts/create-employee.js",
+    "admin:grant": "node scripts/grant-admin.js"
   },
   "dependencies": {
     "bcryptjs": "^3.0.3",

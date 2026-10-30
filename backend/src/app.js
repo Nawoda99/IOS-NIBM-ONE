@@ -10,10 +10,13 @@ import { ensureEligibility, employeeSelect } from './records.js';
 import { attendanceRecords, machineSelect, machineID, ATTENDANCE_SETTINGS } from './attendance.js';
 import { appID, canonicalEPF } from './identity.js';
 import { attendanceMonthRange, attendanceTimeZone, dailyAttendance } from './attendance-calendar.js';
+import {appRoles,permissionCatalog,permissionsFor,hasPermission,requirePermission,requireAdministrator,savePermissions} from './access.js';
+import {employeeAccounts,createAccount,updateAccount} from './administration.js';
+import {branchDirectory,saveBranchLocation} from './branches.js';
 
 const dummyPassword = bcrypt.hashSync('invalid-login-placeholder', 12);
-const privileged = user => ['Approver', 'Support'].includes(user.role);
-const remoteProfile = user => profile({ ...user, id: appID(user.id), epf_no: String(user.epf_no), branch: user.branch ?? '' });
+const privileged = user => hasPermission(user,'machines.manage');
+const remoteProfile = user => ({...profile({ ...user, id: appID(user.id), epf_no: String(user.epf_no), branch: user.branch ?? '' }),permissions:user.permissions??[]});
 
 export function createApp({ db, config, deviceSync }) {
   const app = express();
@@ -29,6 +32,7 @@ export function createApp({ db, config, deviceSync }) {
     const [user] = await db.query(employeeSelect + ' WHERE e.epf_no=? AND COALESCE(e.status,1)=1 AND (c.expiry IS NULL OR c.expiry>UTC_TIMESTAMP())', [Number(epfNo)]);
     const matched = await bcrypt.compare(password, user?.password_hash || dummyPassword);
     if (!user || !matched || !password || Buffer.byteLength(password) > 72) throw new HTTPError(401, 'The EPF No. or password is incorrect.');
+    user.permissions=await permissionsFor(db,user.role);
     const token = randomBytes(32).toString('hex');
     const now = new Date();
     await db.query('INSERT INTO login_devices (id,employeeId,sessionId,deviceType,deviceName,lastSeenAt,createdAt,updatedAt) VALUES (?,?,?,?,?,?,?,?)', [randomUUID(), user.id, hash(token), 'IOS', 'NIBM ONE', now, now, now]);
@@ -44,10 +48,11 @@ export function createApp({ db, config, deviceSync }) {
         AND COALESCE(e.status,1)=1 AND (c.expiry IS NULL OR c.expiry>UTC_TIMESTAMP())`, [hash(token)]);
     if (!user) throw new HTTPError(401, 'Your session has expired. Sign in again.');
     if (!/^\d{1,20}$/.test(user.epf_no)) throw new HTTPError(401, 'Your account needs its actual EPF No. registered by an administrator.');
+    user.permissions=await permissionsFor(db,user.role);
     req.user = user; next();
   });
   app.use('/api', api);
-  api.get('/attendance', async (req, res) => {
+  api.get('/attendance', requirePermission('attendance.view'), async (req, res) => {
     const range = attendanceMonthRange(req.query.month);
     const punches = await attendanceRecords(db, String(req.user.epf_no), range.start, ATTENDANCE_SETTINGS, range.end);
     res.json({ month: range.month, timeZone: attendanceTimeZone, method: 'first-last', punches, days: dailyAttendance(punches) });
@@ -56,20 +61,20 @@ export function createApp({ db, config, deviceSync }) {
   api.get('/snapshot', async (req, res) => {
     const user = req.user;
     const snapshot = await db.transaction(async tx => {
-      const leaveRequests = await records(tx, user.id, 'leave');
-      const tickets = await records(tx, user.role === 'Support' ? null : user.id, 'ticket');
+      const leaveRequests = hasPermission(user,'leave.view') ? await records(tx, user.id, 'leave') : [];
+      const tickets = hasPermission(user,'tickets.view') ? await records(tx, hasPermission(user,'tickets.manage') ? null : user.id, 'ticket') : [];
       const notices = await records(tx, user.id, 'notice');
-      const approvals = user.role === 'Approver' ? await records(tx, null, 'leave', { excludeOwner: user.id }) : [];
+      const approvals = hasPermission(user,'leave.approve') ? await records(tx, null, 'leave', { excludeOwner: user.id }) : [];
       const currentMonth = attendanceMonthRange(undefined);
-      const punches = await attendanceRecords(tx, String(user.epf_no), currentMonth.start, ATTENDANCE_SETTINGS, currentMonth.end);
-      const sync = (await tx.query(machineSelect + ' WHERE m.id IN (SELECT p.pun_machine_id FROM punches p WHERE p.emp_epf_no=?) ORDER BY m.id', [user.epf_no]))
+      const punches = hasPermission(user,'attendance.view') ? await attendanceRecords(tx, String(user.epf_no), currentMonth.start, ATTENDANCE_SETTINGS, currentMonth.end) : [];
+      const sync = (hasPermission(user,'attendance.view') ? await tx.query(machineSelect + ' WHERE m.id IN (SELECT p.pun_machine_id FROM punches p WHERE p.emp_epf_no=?) ORDER BY m.id', [user.epf_no]) : [])
         .map(row => ({ code: row.code ?? 'machine-' + row.id, name: row.machine_description ?? row.machine_model, lastSyncedAt: row.last_synced_at ? iso(row.last_synced_at) : null, lastError: row.last_sync_status === 'FAILED' ? row.last_sync_message : null }));
       return { profile: remoteProfile(user), state: { leaveRequests, tickets, notices }, approvals, punches, sync };
     });
     res.json(snapshot);
   });
 
-  api.post('/leave', async (req, res) => {
+  api.post('/leave', requirePermission('leave.apply'), async (req, res) => {
     const input = req.body || {}, user = req.user;
     const value = await db.transaction(async tx => {
       await lockUser(tx, user.id);
@@ -83,8 +88,7 @@ export function createApp({ db, config, deviceSync }) {
     });
     res.json(value);
   });
-  api.post('/leave/:id/decision', async (req, res) => {
-    if (req.user.role !== 'Approver') throw new HTTPError(403, 'Approver access is required.');
+  api.post('/leave/:id/decision', requirePermission('leave.approve'), async (req, res) => {
     const id = uuid(req.params.id), input = req.body || {};
     if (typeof input.approve !== 'boolean') throw new HTTPError(400, 'Specify approval or rejection.');
     const original = await findRecord(db, id, 'leave');
@@ -104,7 +108,7 @@ export function createApp({ db, config, deviceSync }) {
     res.json(value);
   });
 
-  api.post('/tickets', async (req, res) => {
+  api.post('/tickets', requirePermission('tickets.create'), async (req, res) => {
     const input = req.body || {};
     const title = required(input.title, 'title', 160), description = required(input.description, 'description'), room = required(input.room, 'room', 200);
     if (!['IT', 'Network', 'Air conditioning', 'Electrical', 'Projector', 'Furniture', 'Maintenance', 'Other'].includes(input.category) || !['Normal', 'High'].includes(input.priority)) throw new HTTPError(400, 'Invalid category or priority.');
@@ -127,7 +131,7 @@ export function createApp({ db, config, deviceSync }) {
   async function mutateTicket(req, change, assign = false) {
     const id = uuid(req.params.id);
     const original = await findRecord(db, id, 'ticket');
-    if (!original || (original.owner_id !== req.user.id && req.user.role !== 'Support')) throw new HTTPError(404, 'Ticket not found.');
+    if (!original || (original.owner_id !== req.user.id && !hasPermission(req.user,'tickets.manage'))) throw new HTTPError(404, 'Ticket not found.');
     return db.transaction(async tx => {
       await lockUser(tx, original.owner_id);
       const row = await findRecord(tx, id, 'ticket', { lock: true });
@@ -138,12 +142,11 @@ export function createApp({ db, config, deviceSync }) {
       return ticket;
     });
   }
-  api.post('/tickets/:id/comments', async (req, res) => {
+  api.post('/tickets/:id/comments', requirePermission('tickets.view'), async (req, res) => {
     const text = required(req.body?.text, 'comment');
     res.json(await mutateTicket(req, ticket => ticket.comments.push({ id: randomUUID(), author: req.user.name, text, createdAt: iso() })));
   });
-  api.post('/tickets/:id/advance', async (req, res) => {
-    if (req.user.role !== 'Support') throw new HTTPError(403, 'Support access is required.');
+  api.post('/tickets/:id/advance', requirePermission('tickets.manage'), async (req, res) => {
     res.json(await mutateTicket(req, ticket => {
       const index = ticketStatuses.indexOf(ticket.status);
       if (index < 0 || index + 1 >= ticketStatuses.length) throw new HTTPError(409, 'The ticket is already closed.');
@@ -188,6 +191,22 @@ export function createApp({ db, config, deviceSync }) {
     await mapEmployee(db, req.body?.machineID, req.body || {}); res.sendStatus(204);
   });
 
+  api.get('/branches',async(req,res)=>{
+    if(!hasPermission(req.user,'map.view')&&req.user.role!=='Administrator')throw new HTTPError(403,'Map access is required.');
+    res.json(await branchDirectory(db));
+  });
+  api.use('/admin',requireAdministrator);
+  api.get('/admin/employees',async(req,res)=>res.json(await employeeAccounts(db,req.query.search)));
+  api.post('/admin/employees',async(req,res)=>res.status(201).json(await createAccount(db,req.body??{},req.user.id)));
+  api.patch('/admin/employees/:id',async(req,res)=>{
+    await updateAccount(db,req.params.id,req.body??{},req.user.id);res.sendStatus(204);
+  });
+  api.get('/admin/permissions',async(_req,res)=>res.json({permissions:permissionCatalog,roles:await Promise.all(appRoles.map(async role=>({role,permissions:await permissionsFor(db,role)})))}));
+  api.put('/admin/permissions/:role',async(req,res)=>res.json({role:req.params.role,permissions:await savePermissions(db,req.params.role,req.body?.permissions)}));
+  api.put('/admin/branches/:id/location',async(req,res)=>{
+    await saveBranchLocation(db,req.params.id,req.body??{});res.sendStatus(204);
+  });
+
   const integrations = express.Router();
   integrations.use((req, _res, next) => {
     const expected = config.ingestKey, supplied = req.get('X-Ingest-Key') || '';
@@ -213,7 +232,7 @@ export function createApp({ db, config, deviceSync }) {
     let status = error.status || 500;
     if (error.type === 'entity.too.large') status = 413;
     if (error.code === 'ER_DUP_ENTRY') status = 409;
-    const reason = status < 500 || error instanceof HTTPError ? error.message : 'Database operation failed. Check the server configuration and logs.';
+    const reason = error.code === 'ER_DUP_ENTRY' ? 'That EPF, identity or login name is already registered.' : status < 500 || error instanceof HTTPError ? error.message : 'Database operation failed. Check the server configuration and logs.';
     if (status >= 500 && !(error instanceof HTTPError)) console.error('Request failed:', error.code || error.constructor.name);
     res.status(status).json({ error: true, reason });
   });
