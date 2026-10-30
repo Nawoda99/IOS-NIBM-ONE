@@ -1,6 +1,7 @@
 import SwiftUI
 
 @main
+@MainActor
 struct NIBMOneApp: App {
     @StateObject private var model = AppModel()
 
